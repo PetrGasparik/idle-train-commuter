@@ -9,7 +9,7 @@ export const generateTrainSkin = async (prompt: string): Promise<string | null> 
       contents: {
         parts: [
           {
-            text: `Top-down view of a single railway train car. Professional flat vector design. Style: ${prompt}. Solid white background, high detail, minimal shadows, orthogonal projection.`,
+            text: `Top-down orthogonal view of a single high-quality railway car texture. Theme: ${prompt}. Solid flat lighting, no perspective distortion, high detail, seamless-ready, centered on a neutral white background. Professional game asset style.`,
           },
         ],
       },

@@ -40,10 +40,14 @@ const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive }) => {
         
         {isLocomotive ? (
           <>
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-5 bg-gray-900/80 rounded-sm border border-yellow-400/50 flex items-center justify-center">
-               <div className="w-1 h-2 bg-yellow-400 blur-[1px]"></div>
+            {/* Přední světlomet s jasnější září */}
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-5 bg-gray-900/90 rounded-sm border border-yellow-400/50 flex items-center justify-center">
+               <div className="w-1.5 h-2.5 bg-yellow-300 blur-[2px] animate-pulse"></div>
             </div>
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 bg-black/40 rounded-full border border-white/5"></div>
+            {/* Kabina strojvedoucího */}
+            <div className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-5 bg-black/30 rounded-sm border border-white/10 shadow-inner"></div>
+            {/* Komín - zvýrazněný okraj */}
+            <div className="absolute right-12 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-800 rounded-full border-2 border-black/60 shadow-lg z-10"></div>
           </>
         ) : (
           <div className="flex justify-around items-center h-full px-2 gap-1">
@@ -66,7 +70,46 @@ const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive }) => {
       }}
     >
       <div className="w-full h-full relative flex items-center justify-center">
+        {/* Bafání kouře - generuje se pouze pro lokomotivu v pohybu */}
+        {isLocomotive && config.speed > 0 && (
+          <div className="absolute right-14 top-1/2 -translate-y-1/2 pointer-events-none z-0">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="absolute bg-white/30 blur-md rounded-full"
+                style={{
+                  width: '14px',
+                  height: '14px',
+                  // Rychlost animace závisí na rychlosti vlaku
+                  animation: `puff ${Math.max(0.5, 3 / (config.speed * 0.15 + 1))}s infinite linear`,
+                  animationDelay: `${i * 0.3}s`,
+                  left: '-7px',
+                  top: '-7px',
+                }}
+              />
+            ))}
+          </div>
+        )}
+        
         {renderContent()}
+        
+        <style>{`
+          @keyframes puff {
+            0% {
+              transform: translate(0, 0) scale(0.4);
+              opacity: 0;
+            }
+            15% {
+              opacity: 0.7;
+              transform: translate(-10px, -2px) scale(0.8);
+            }
+            100% {
+              /* Kouř se táhne za lokomotivou a mírně stoupá/klesá */
+              transform: translate(-60px, -20px) scale(3.5);
+              opacity: 0;
+            }
+          }
+        `}</style>
       </div>
     </div>
   );
