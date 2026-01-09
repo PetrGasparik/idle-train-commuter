@@ -4,8 +4,8 @@ import { TrainConfig, Position } from './types';
 import TrainCar from './components/TrainCar';
 import ControlPanel from './components/ControlPanel';
 
-const TRACK_MARGIN = 15; 
-const CORNER_RADIUS = 40; 
+const TRACK_MARGIN = 40; 
+const CORNER_RADIUS = 50; 
 
 const App: React.FC = () => {
   const [config, setConfig] = useState<TrainConfig>({
@@ -33,11 +33,13 @@ const App: React.FC = () => {
     let currentD = d % perimeter;
     if (currentD < 0) currentD += perimeter;
 
+    // Horní hrana
     if (currentD < w_strip) {
       return { x: m + R + currentD, y: m, rotation: 0 };
     }
     currentD -= w_strip;
 
+    // Horní pravý roh
     if (currentD < arc) {
       const angle = (currentD / arc) * (Math.PI / 2);
       return { 
@@ -48,11 +50,13 @@ const App: React.FC = () => {
     }
     currentD -= arc;
 
+    // Pravá hrana
     if (currentD < h_strip) {
       return { x: W - m, y: m + R + currentD, rotation: 90 };
     }
     currentD -= h_strip;
 
+    // Dolní pravý roh
     if (currentD < arc) {
       const angle = (currentD / arc) * (Math.PI / 2);
       return { 
@@ -63,11 +67,13 @@ const App: React.FC = () => {
     }
     currentD -= arc;
 
+    // Dolní hrana
     if (currentD < w_strip) {
       return { x: (W - m - R) - currentD, y: H - m, rotation: 180 };
     }
     currentD -= w_strip;
 
+    // Dolní levý roh
     if (currentD < arc) {
       const angle = (currentD / arc) * (Math.PI / 2);
       return { 
@@ -78,11 +84,13 @@ const App: React.FC = () => {
     }
     currentD -= arc;
 
+    // Levá hrana
     if (currentD < h_strip) {
       return { x: m, y: (H - m - R) - currentD, rotation: 270 };
     }
     currentD -= h_strip;
 
+    // Horní levý roh
     const angle = (currentD / arc) * (Math.PI / 2);
     return { 
       x: (m + R) - Math.cos(angle) * R, 
@@ -123,7 +131,7 @@ const App: React.FC = () => {
         ipcRenderer.send('set-ignore-mouse-events', ignore, true);
       }
     } catch (e) {
-      // Tichý fallback pro prohlížeč
+      // Browser fallback
     }
   };
 
@@ -133,14 +141,13 @@ const App: React.FC = () => {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-transparent select-none">
-      {/* Vlaky jsou v kontejneru, který neblokuje myš */}
       <div className="train-container">
         {Array.from({ length: config.carCount }).map((_, i) => (
           <div 
             key={i} 
             ref={el => { carRefs.current[i] = el; }}
             className="absolute pointer-events-none z-50 will-change-transform"
-            style={{ left: 0, top: 0 }}
+            style={{ left: 0, top: 0, overflow: 'visible' }}
           >
             <TrainCar 
               config={config} 
@@ -161,10 +168,6 @@ const App: React.FC = () => {
             onChange={setConfig} 
             onWallpaperChange={() => {}} 
           />
-        </div>
-
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 px-4 py-1.5 rounded-full text-white/50 text-[9px] backdrop-blur-md pointer-events-none border border-white/10 tracking-[0.4em] uppercase font-bold ring-1 ring-white/5">
-          System Perimeter Active
         </div>
       </div>
     </div>

@@ -19,16 +19,14 @@
       background-color: transparent !important;
       width: 100vw;
       height: 100vh;
-      /* Zajištění, že pozadí nebude blokovat kliknutí */
       pointer-events: none;
     }
-    /* Ovládací panel musí přijímat události myši */
     #root > div {
       pointer-events: auto;
     }
-    /* Vlak samotný události nepotřebuje */
     .train-container {
       pointer-events: none;
+      overflow: visible;
     }
   </style>
 <script type="importmap">

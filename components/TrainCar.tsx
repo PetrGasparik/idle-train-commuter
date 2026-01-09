@@ -40,13 +40,13 @@ const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive }) => {
         
         {isLocomotive ? (
           <>
-            {/* Přední světlomet s jasnější září */}
+            {/* Přední světlomet */}
             <div className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-5 bg-gray-900/90 rounded-sm border border-yellow-400/50 flex items-center justify-center">
                <div className="w-1.5 h-2.5 bg-yellow-300 blur-[2px] animate-pulse"></div>
             </div>
-            {/* Kabina strojvedoucího */}
+            {/* Kabina */}
             <div className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-5 bg-black/30 rounded-sm border border-white/10 shadow-inner"></div>
-            {/* Komín - zvýrazněný okraj */}
+            {/* Komín */}
             <div className="absolute right-12 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-800 rounded-full border-2 border-black/60 shadow-lg z-10"></div>
           </>
         ) : (
@@ -67,24 +67,24 @@ const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive }) => {
       style={{
         width: width,
         height: height,
+        overflow: 'visible' // Důležité: umožní kouři "vyletět" z divu vagonku
       }}
     >
-      <div className="w-full h-full relative flex items-center justify-center">
-        {/* Bafání kouře - generuje se pouze pro lokomotivu v pohybu */}
+      <div className="w-full h-full relative flex items-center justify-center" style={{ overflow: 'visible' }}>
+        {/* Bafání kouře */}
         {isLocomotive && config.speed > 0 && (
-          <div className="absolute right-14 top-1/2 -translate-y-1/2 pointer-events-none z-0">
+          <div className="absolute right-14 top-1/2 -translate-y-1/2 pointer-events-none z-[60]" style={{ overflow: 'visible' }}>
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="absolute bg-white/30 blur-md rounded-full"
+                className="absolute bg-white/60 blur-md rounded-full"
                 style={{
-                  width: '14px',
-                  height: '14px',
-                  // Rychlost animace závisí na rychlosti vlaku
-                  animation: `puff ${Math.max(0.5, 3 / (config.speed * 0.15 + 1))}s infinite linear`,
-                  animationDelay: `${i * 0.3}s`,
-                  left: '-7px',
-                  top: '-7px',
+                  width: '18px',
+                  height: '18px',
+                  animation: `puff ${Math.max(0.4, 2.5 / (config.speed * 0.2 + 1))}s infinite linear`,
+                  animationDelay: `${i * 0.25}s`,
+                  left: '-9px',
+                  top: '-9px',
                 }}
               />
             ))}
@@ -96,16 +96,15 @@ const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive }) => {
         <style>{`
           @keyframes puff {
             0% {
-              transform: translate(0, 0) scale(0.4);
+              transform: translate(0, 0) scale(0.3);
               opacity: 0;
             }
-            15% {
-              opacity: 0.7;
-              transform: translate(-10px, -2px) scale(0.8);
+            10% {
+              opacity: 0.9;
             }
             100% {
-              /* Kouř se táhne za lokomotivou a mírně stoupá/klesá */
-              transform: translate(-60px, -20px) scale(3.5);
+              /* Směr +25px zajistí, že kouř fouká do plochy (inward), ne ven z monitoru */
+              transform: translate(-80px, 25px) scale(4);
               opacity: 0;
             }
           }
