@@ -54,6 +54,7 @@ const App: React.FC = () => {
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isPanelVisible, setIsPanelVisible] = useState(false);
+  const hoverTimeoutRef = useRef<number | null>(null);
   
   const isAppFocused = useRef(true);
   const resourcesRef = useRef<Resources>({ energy: 40, scrap: 0, totalDistance: 0 });
@@ -131,20 +132,38 @@ const App: React.FC = () => {
     } catch (e) {}
   }, [isElectron]);
 
-  // Click-through logic: Only catch mouse if we are over an interactive element
+  // Handle panel visibility with a grace period
+  const showHub = () => {
+    if (hoverTimeoutRef.current) {
+      window.clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsPanelVisible(true);
+    setIgnoreMouse(false);
+  };
+
+  const hideHub = () => {
+    hoverTimeoutRef.current = window.setTimeout(() => {
+      setIsPanelVisible(false);
+      setIgnoreMouse(true);
+    }, 300); // 300ms window to cross the gap
+  };
+
   useEffect(() => {
     if (!isElectron) return;
 
     const handleGlobalMouseMove = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // If we are over a 'pointer-events-auto' element, stop ignoring mouse
       const isInteractive = !!target.closest('.pointer-events-auto');
-      setIgnoreMouse(!isInteractive);
+      // Only modify ignore state if we are NOT currently interacting with the hub
+      if (!isPanelVisible) {
+        setIgnoreMouse(!isInteractive);
+      }
     };
 
     window.addEventListener('mousemove', handleGlobalMouseMove);
     return () => window.removeEventListener('mousemove', handleGlobalMouseMove);
-  }, [isElectron, setIgnoreMouse]);
+  }, [isElectron, setIgnoreMouse, isPanelVisible]);
 
   useEffect(() => {
     addLog('logInit', 'success');
@@ -163,9 +182,7 @@ const App: React.FC = () => {
       lastActivityRef.current = performance.now();
     };
 
-    const handleMouseDown = (e: MouseEvent) => {
-      // Background clicks don't count if we are ignoring mouse
-      // But in simulation/web mode they do
+    const handleMouseDown = () => {
       const miningWagons = config.cars.filter(c => c === 'mining').length;
       const multiplier = 1 + (miningWagons * 0.5);
       resourcesRef.current.scrap += (0.5 * multiplier);
@@ -345,7 +362,6 @@ const App: React.FC = () => {
     <div className="relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none">
       {!isElectron && <DesktopSimulator logs={logs} language={language} />}
 
-      {/* Overseer Drone Visual */}
       <div ref={workerVisualRef} className="absolute z-[110] pointer-events-none transition-opacity duration-300">
         <div className="relative">
           <div className="absolute top-1/2 right-1/2 -translate-y-1/2 w-4 h-0.5 bg-blue-400/40 blur-[1px] origin-right"></div>
@@ -355,7 +371,6 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Smoke Particles */}
       <div className="absolute inset-0 pointer-events-none z-[150] overflow-visible">
         {renderPuffs.map(puff => (
           <div key={puff.id} className="absolute" style={{ left: puff.x, top: puff.y, transform: `translate(-50%, -50%) rotate(${puff.rotation}deg)` }}>
@@ -369,7 +384,6 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      {/* The Train */}
       <div className="train-container">
         {config.cars.map((carType, i) => (
           <div key={i} ref={el => { carRefs.current[i] = el; }} className="absolute pointer-events-none will-change-transform z-[100]">
@@ -378,37 +392,41 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      {/* Command Post & Hub (The Interactive Zones) */}
       <div className="absolute inset-0 pointer-events-none z-[200]">
         <div 
           className="absolute" 
           style={{ left: anchorPos.x, top: anchorPos.y }}
         >
-          {/* We pass setIgnoreMouse to children so they can explicitly state they are dragging etc */}
-          <DraggableAnchor 
-            language={language}
-            onHover={setIsPanelVisible} 
-            onPositionChange={(x, y) => setAnchorPos({x, y})} 
-            initialPos={anchorPos} 
-            setIgnoreMouse={setIgnoreMouse}
-          />
-          
-          {isPanelVisible && (
-            <div 
-              className="absolute left-10 -top-20 transition-all duration-300 pointer-events-auto shadow-2xl opacity-100 translate-y-0"
-              onMouseEnter={() => setIgnoreMouse(false)}
-            >
-              <ControlPanel 
-                config={config} 
-                resources={uiResources} 
-                language={language}
-                onLanguageChange={setLanguage}
-                onChange={setConfig} 
-                onPulse={handleManualPulse} 
-                onUpgrade={handleUpgrade} 
-              />
-            </div>
-          )}
+          <div 
+            className="relative"
+            onMouseEnter={showHub}
+            onMouseLeave={hideHub}
+          >
+            <DraggableAnchor 
+              language={language}
+              onHover={setIsPanelVisible} 
+              onPositionChange={(x, y) => setAnchorPos({x, y})} 
+              initialPos={anchorPos} 
+              setIgnoreMouse={setIgnoreMouse}
+            />
+            
+            {isPanelVisible && (
+              <div 
+                className="absolute left-8 -top-24 transition-all duration-300 pointer-events-auto shadow-2xl opacity-100 translate-y-0"
+                onMouseEnter={showHub}
+              >
+                <ControlPanel 
+                  config={config} 
+                  resources={uiResources} 
+                  language={language}
+                  onLanguageChange={setLanguage}
+                  onChange={setConfig} 
+                  onPulse={handleManualPulse} 
+                  onUpgrade={handleUpgrade} 
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
