@@ -319,11 +319,17 @@ const App: React.FC = () => {
   }, [animate]);
 
   const setIgnoreMouse = (ignore: boolean) => {
-    try { if ((window as any).require) (window as any).require('electron').ipcRenderer.send('set-ignore-mouse-events', ignore, true); } catch (e) {}
+    try { 
+      if ((window as any).require) {
+        (window as any).require('electron').ipcRenderer.send('set-ignore-mouse-events', ignore, true);
+      }
+    } catch (e) {
+      console.warn("Electron IPC failed", e);
+    }
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-transparent select-none">
+    <div className="relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none">
       {!isElectron && <DesktopSimulator logs={logs} language={language} />}
 
       <div ref={workerVisualRef} className="absolute z-[110] pointer-events-none transition-opacity duration-300">
@@ -356,8 +362,14 @@ const App: React.FC = () => {
         ))}
       </div>
 
+      {/* Interactive Layer */}
       <div className="absolute inset-0 pointer-events-none z-[200]">
-        <div className="pointer-events-auto" onMouseEnter={() => setIgnoreMouse(false)} onMouseLeave={() => !isPanelVisible && setIgnoreMouse(true)}>
+        <div 
+          className="pointer-events-auto absolute" 
+          style={{ left: anchorPos.x, top: anchorPos.y, transform: 'translate(-50%, -50%)' }}
+          onMouseEnter={() => setIgnoreMouse(false)} 
+          onMouseLeave={() => !isPanelVisible && setIgnoreMouse(true)}
+        >
           <DraggableAnchor 
             language={language}
             onHover={setIsPanelVisible} 
@@ -366,20 +378,24 @@ const App: React.FC = () => {
           />
         </div>
         
-        <div className={`fixed transition-all duration-300 pointer-events-auto shadow-2xl ${isPanelVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`} 
-             style={{ left: anchorPos.x + 30, top: anchorPos.y - 80 }} 
-             onMouseEnter={() => { setIsPanelVisible(true); setIgnoreMouse(false); }} 
-             onMouseLeave={() => { setIsPanelVisible(false); setIgnoreMouse(true); }}>
-          <ControlPanel 
-            config={config} 
-            resources={uiResources} 
-            language={language}
-            onLanguageChange={setLanguage}
-            onChange={setConfig} 
-            onPulse={handleManualPulse} 
-            onUpgrade={handleUpgrade} 
-          />
-        </div>
+        {isPanelVisible && (
+          <div 
+            className="fixed transition-all duration-300 pointer-events-auto shadow-2xl opacity-100 translate-y-0" 
+            style={{ left: anchorPos.x + 30, top: anchorPos.y - 80 }} 
+            onMouseEnter={() => { setIsPanelVisible(true); setIgnoreMouse(false); }} 
+            onMouseLeave={() => { setIsPanelVisible(false); setIgnoreMouse(true); }}
+          >
+            <ControlPanel 
+              config={config} 
+              resources={uiResources} 
+              language={language}
+              onLanguageChange={setLanguage}
+              onChange={setConfig} 
+              onPulse={handleManualPulse} 
+              onUpgrade={handleUpgrade} 
+            />
+          </div>
+        )}
       </div>
 
       <style>{`
