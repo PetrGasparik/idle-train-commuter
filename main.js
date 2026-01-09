@@ -1,6 +1,11 @@
 
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
-const path = require('path');
+import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// V ES modulech neexistuje globální proměnná __dirname, musíme ji vytvořit takto:
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -25,10 +30,10 @@ function createWindow() {
 
   win.setIgnoreMouseEvents(true, { forward: true });
 
-  // V produkci načítáme z 'dist/index.html', při vývoji (pokud bys chtěl) z lokálního serveru
   const isDev = !app.isPackaged;
   if (isDev) {
-    // V devu bys mohl použít win.loadURL('http://localhost:5173')
+    // Pokud spouštíte 'npm run dev', Vite běží na portu 5173
+    // Pro jednoduchost teď načítáme přímo soubor, ale pro vývoj je lepší URL
     win.loadFile('index.html'); 
   } else {
     win.loadFile(path.join(__dirname, 'dist/index.html'));
@@ -46,10 +51,14 @@ function createWindow() {
   });
 }
 
-app.commandLine.appendSwitch('enable-transparent-visuals');
+// Oprava pro průhlednost na některých systémech
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('enable-transparent-visuals');
+}
 app.disableHardwareAcceleration();
 
 app.whenReady().then(() => {
+  // Krátká pauza pomáhá stabilitě průhledného okna na Windows
   setTimeout(createWindow, 500);
 });
 
