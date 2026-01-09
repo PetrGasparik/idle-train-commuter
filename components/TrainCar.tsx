@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { TrainConfig } from '../types';
 
@@ -14,7 +13,7 @@ const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive }) => {
   const renderContent = () => {
     if (config.type === 'ai' && config.imageUrl) {
       return (
-        <div className="w-full h-full relative drop-shadow-lg">
+        <div className="w-full h-full relative drop-shadow-lg z-10">
           <img 
             src={config.imageUrl} 
             alt="train-car" 
@@ -29,7 +28,7 @@ const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive }) => {
     
     return (
       <div 
-        className="relative w-full h-full rounded-md shadow-lg overflow-hidden"
+        className="relative w-full h-full rounded-md shadow-lg overflow-hidden z-10"
         style={{ 
           backgroundColor: baseColor, 
           border: '1.5px solid rgba(0,0,0,0.4)',
@@ -67,48 +66,11 @@ const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive }) => {
       style={{
         width: width,
         height: height,
-        overflow: 'visible' // Důležité: umožní kouři "vyletět" z divu vagonku
+        overflow: 'visible'
       }}
     >
       <div className="w-full h-full relative flex items-center justify-center" style={{ overflow: 'visible' }}>
-        {/* Bafání kouře */}
-        {isLocomotive && config.speed > 0 && (
-          <div className="absolute right-14 top-1/2 -translate-y-1/2 pointer-events-none z-[60]" style={{ overflow: 'visible' }}>
-            {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="absolute bg-white/60 blur-md rounded-full"
-                style={{
-                  width: '18px',
-                  height: '18px',
-                  animation: `puff ${Math.max(0.4, 2.5 / (config.speed * 0.2 + 1))}s infinite linear`,
-                  animationDelay: `${i * 0.25}s`,
-                  left: '-9px',
-                  top: '-9px',
-                }}
-              />
-            ))}
-          </div>
-        )}
-        
         {renderContent()}
-        
-        <style>{`
-          @keyframes puff {
-            0% {
-              transform: translate(0, 0) scale(0.3);
-              opacity: 0;
-            }
-            10% {
-              opacity: 0.9;
-            }
-            100% {
-              /* Směr +25px zajistí, že kouř fouká do plochy (inward), ne ven z monitoru */
-              transform: translate(-80px, 25px) scale(4);
-              opacity: 0;
-            }
-          }
-        `}</style>
       </div>
     </div>
   );
