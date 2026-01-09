@@ -42,7 +42,6 @@ const App: React.FC = () => {
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Robust check: Ensure position is within viewport
         if (typeof parsed.x === 'number' && typeof parsed.y === 'number' && 
             parsed.x > 0 && parsed.x < window.innerWidth &&
             parsed.y > 0 && parsed.y < window.innerHeight) {
@@ -50,26 +49,13 @@ const App: React.FC = () => {
         }
       }
     } catch (e) {}
-    return { x: 100, y: 100 };
+    return { x: 120, y: 120 };
   });
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const isAppFocused = useRef(true);
-  
-  const addLog = useCallback((messageKey: any, type: LogEntry['type'] = 'info') => {
-    const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const message = t(language, messageKey);
-    const newLog: LogEntry = {
-      id: Math.random().toString(36).substr(2, 9),
-      timestamp,
-      message,
-      type
-    };
-    setLogs(prev => [...prev.slice(-14), newLog]);
-  }, [language]);
-
   const [isPanelVisible, setIsPanelVisible] = useState(false);
   
+  const isAppFocused = useRef(true);
   const resourcesRef = useRef<Resources>({ energy: 40, scrap: 0, totalDistance: 0 });
   const workerRef = useRef<WorkerState>({ 
     status: 'sleeping', 
@@ -99,6 +85,18 @@ const App: React.FC = () => {
     localStorage.setItem('language', language);
   }, [language]);
 
+  const addLog = useCallback((messageKey: any, type: LogEntry['type'] = 'info') => {
+    const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const message = t(language, messageKey);
+    const newLog: LogEntry = {
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp,
+      message,
+      type
+    };
+    setLogs(prev => [...prev.slice(-14), newLog]);
+  }, [language]);
+
   const handleManualPulse = useCallback(() => {
     resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 20);
     lastActivityRef.current = performance.now();
@@ -123,7 +121,30 @@ const App: React.FC = () => {
         addLog(logKey, 'success');
       }
     }
-  }, [addLog]);
+  }, [addLog, config.cars]);
+
+  const setIgnoreMouse = useCallback((ignore: boolean) => {
+    if (!isElectron) return;
+    try { 
+      const { ipcRenderer } = (window as any).require('electron');
+      ipcRenderer.send('set-ignore-mouse-events', ignore, true);
+    } catch (e) {}
+  }, [isElectron]);
+
+  // Click-through logic: Only catch mouse if we are over an interactive element
+  useEffect(() => {
+    if (!isElectron) return;
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // If we are over a 'pointer-events-auto' element, stop ignoring mouse
+      const isInteractive = !!target.closest('.pointer-events-auto');
+      setIgnoreMouse(!isInteractive);
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    return () => window.removeEventListener('mousemove', handleGlobalMouseMove);
+  }, [isElectron, setIgnoreMouse]);
 
   useEffect(() => {
     addLog('logInit', 'success');
@@ -142,7 +163,9 @@ const App: React.FC = () => {
       lastActivityRef.current = performance.now();
     };
 
-    const handleMouseDown = () => {
+    const handleMouseDown = (e: MouseEvent) => {
+      // Background clicks don't count if we are ignoring mouse
+      // But in simulation/web mode they do
       const miningWagons = config.cars.filter(c => c === 'mining').length;
       const multiplier = 1 + (miningWagons * 0.5);
       resourcesRef.current.scrap += (0.5 * multiplier);
@@ -154,9 +177,8 @@ const App: React.FC = () => {
     
     const syncInterval = setInterval(() => {
       setUiResources({ ...resourcesRef.current });
-      // Fix: Removed non-existent setWorker call as the drone's position is managed via workerVisualRef in animate().
       setRenderPuffs([...smokePuffsRef.current]);
-    }, 50);
+    }, 100);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -319,20 +341,11 @@ const App: React.FC = () => {
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [animate]);
 
-  const setIgnoreMouse = (ignore: boolean) => {
-    try { 
-      if ((window as any).require) {
-        (window as any).require('electron').ipcRenderer.send('set-ignore-mouse-events', ignore, true);
-      }
-    } catch (e) {
-      console.warn("Electron IPC failed", e);
-    }
-  };
-
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none">
       {!isElectron && <DesktopSimulator logs={logs} language={language} />}
 
+      {/* Overseer Drone Visual */}
       <div ref={workerVisualRef} className="absolute z-[110] pointer-events-none transition-opacity duration-300">
         <div className="relative">
           <div className="absolute top-1/2 right-1/2 -translate-y-1/2 w-4 h-0.5 bg-blue-400/40 blur-[1px] origin-right"></div>
@@ -342,6 +355,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
+      {/* Smoke Particles */}
       <div className="absolute inset-0 pointer-events-none z-[150] overflow-visible">
         {renderPuffs.map(puff => (
           <div key={puff.id} className="absolute" style={{ left: puff.x, top: puff.y, transform: `translate(-50%, -50%) rotate(${puff.rotation}deg)` }}>
@@ -355,6 +369,7 @@ const App: React.FC = () => {
         ))}
       </div>
 
+      {/* The Train */}
       <div className="train-container">
         {config.cars.map((carType, i) => (
           <div key={i} ref={el => { carRefs.current[i] = el; }} className="absolute pointer-events-none will-change-transform z-[100]">
@@ -363,16 +378,13 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      {/* Interactive Hub Layer */}
-      <div 
-        className="absolute inset-0 pointer-events-none z-[200]"
-        onMouseEnter={() => setIgnoreMouse(false)}
-        onMouseLeave={() => !isPanelVisible && setIgnoreMouse(true)}
-      >
+      {/* Command Post & Hub (The Interactive Zones) */}
+      <div className="absolute inset-0 pointer-events-none z-[200]">
         <div 
           className="absolute" 
           style={{ left: anchorPos.x, top: anchorPos.y }}
         >
+          {/* We pass setIgnoreMouse to children so they can explicitly state they are dragging etc */}
           <DraggableAnchor 
             language={language}
             onHover={setIsPanelVisible} 
@@ -383,9 +395,8 @@ const App: React.FC = () => {
           
           {isPanelVisible && (
             <div 
-              className="absolute left-10 -top-20 transition-all duration-300 pointer-events-auto shadow-2xl opacity-100 translate-y-0" 
-              onMouseEnter={() => { setIsPanelVisible(true); setIgnoreMouse(false); }} 
-              onMouseLeave={() => { setIsPanelVisible(false); setIgnoreMouse(true); }}
+              className="absolute left-10 -top-20 transition-all duration-300 pointer-events-auto shadow-2xl opacity-100 translate-y-0"
+              onMouseEnter={() => setIgnoreMouse(false)}
             >
               <ControlPanel 
                 config={config} 

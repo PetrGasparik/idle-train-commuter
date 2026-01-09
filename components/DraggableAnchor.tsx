@@ -20,8 +20,9 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = ({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
+    // Explicitly stop ignoring mouse during drag
     setIgnoreMouse(false);
-    // Use screen coordinates to calculate a stable offset
+    
     dragStartOffset.current = {
       x: e.clientX - initialPos.x,
       y: e.clientY - initialPos.y
@@ -37,7 +38,7 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = ({
       const newX = e.clientX - dragStartOffset.current.x;
       const newY = e.clientY - dragStartOffset.current.y;
       
-      // Keep within reasonable viewport bounds
+      // Bounding logic to keep it visible on screen
       const boundedX = Math.max(40, Math.min(window.innerWidth - 40, newX));
       const boundedY = Math.max(40, Math.min(window.innerHeight - 40, newY));
       
