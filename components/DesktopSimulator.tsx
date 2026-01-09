@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { LogEntry } from '../types';
+import { LogEntry, Language } from '../types';
+import { t } from '../locales';
 
 interface DesktopSimulatorProps {
   logs: LogEntry[];
+  language: Language;
 }
 
-const DesktopSimulator: React.FC<DesktopSimulatorProps> = ({ logs }) => {
+const DesktopSimulator: React.FC<DesktopSimulatorProps> = ({ logs, language }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,7 +45,7 @@ const DesktopSimulator: React.FC<DesktopSimulatorProps> = ({ logs }) => {
         <div className="h-10 bg-black/40 flex items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-blue-400 rounded-sm"></div>
-            <span className="text-[11px] text-white/60 font-medium">Simulator Console - train_os.sys</span>
+            <span className="text-[11px] text-white/60 font-medium">{t(language, 'simConsole')} - train_os.sys</span>
           </div>
           <div className="flex gap-4">
             <div className="w-3 h-0.5 bg-white/40"></div>
@@ -62,7 +64,7 @@ const DesktopSimulator: React.FC<DesktopSimulatorProps> = ({ logs }) => {
           }}
         >
           <div className="opacity-40 mb-4 pb-2 border-b border-white/5 uppercase tracking-widest text-[9px]">
-            System initialized. Tracking perimeter activity...
+            {t(language, 'sysInit')}
           </div>
           
           {logs.map((log) => (

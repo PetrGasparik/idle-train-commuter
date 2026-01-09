@@ -1,11 +1,16 @@
+
+export type Language = 'en' | 'cs';
+
+export type CarType = 'standard' | 'mining' | 'residential' | 'ai';
+
 export interface TrainConfig {
   speed: number;
-  carCount: number;
+  cars: CarType[];
   carSpacing: number;
   color: string;
-  type: 'modern' | 'steam' | 'cargo' | 'ai';
+  type: 'modern' | 'steam' | 'cargo' | 'ai'; // Base locomotive style
   imageUrl?: string;
-  idleCruise: boolean; // Nové: Vlak nezastaví úplně při nečinnosti
+  idleCruise: boolean;
 }
 
 export interface Position {
@@ -38,6 +43,16 @@ export interface LogEntry {
   timestamp: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'input';
+}
+
+export type WorkerStatus = 'sleeping' | 'approaching' | 'refueling' | 'riding' | 'returning';
+
+export interface WorkerState {
+  status: WorkerStatus;
+  x: number;
+  y: number;
+  rotation: number;
+  lastAction: number;
 }
 
 export interface AppState {

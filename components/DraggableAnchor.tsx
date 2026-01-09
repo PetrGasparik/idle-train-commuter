@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Station from './Station';
+import { Language } from '../types';
+import { t } from '../locales';
 
 interface DraggableAnchorProps {
+  language: Language;
   onHover: (hovering: boolean) => void;
   onPositionChange: (x: number, y: number) => void;
   initialPos: { x: number, y: number };
 }
 
-const DraggableAnchor: React.FC<DraggableAnchorProps> = ({ onHover, onPositionChange, initialPos }) => {
-  // Ensure we have valid initial coordinates even if window.innerWidth was 0
-  const safeInitialPos = {
-    x: initialPos.x <= 0 ? window.innerWidth - 80 : initialPos.x,
-    y: initialPos.y <= 0 ? 60 : initialPos.y
-  };
-
-  const [pos, setPos] = useState(safeInitialPos);
+const DraggableAnchor: React.FC<DraggableAnchorProps> = ({ 
+  language, onHover, onPositionChange, initialPos 
+}) => {
+  const [pos, setPos] = useState(initialPos);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -34,8 +34,8 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = ({ onHover, onPositionCh
       const newX = e.clientX - dragStartPos.current.x;
       const newY = e.clientY - dragStartPos.current.y;
       
-      const boundedX = Math.max(10, Math.min(window.innerWidth - 50, newX));
-      const boundedY = Math.max(10, Math.min(window.innerHeight - 50, newY));
+      const boundedX = Math.max(50, Math.min(window.innerWidth - 100, newX));
+      const boundedY = Math.max(50, Math.min(window.innerHeight - 100, newY));
       
       setPos({ x: boundedX, y: boundedY });
       onPositionChange(boundedX, boundedY);
@@ -43,6 +43,7 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = ({ onHover, onPositionCh
 
     const handleMouseUp = () => {
       setIsDragging(false);
+      localStorage.setItem('anchorPos', JSON.stringify(pos));
     };
 
     if (isDragging) {
@@ -54,7 +55,7 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = ({ onHover, onPositionCh
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, onPositionChange]);
+  }, [isDragging, onPositionChange, pos]);
 
   return (
     <div
@@ -62,25 +63,23 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = ({ onHover, onPositionCh
       onMouseDown={handleMouseDown}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => !isDragging && onHover(false)}
-      className={`fixed z-[300] cursor-move transition-transform duration-200 pointer-events-auto ${isDragging ? 'scale-125' : 'hover:scale-110'}`}
-      style={{ left: pos.x, top: pos.y }}
+      className={`fixed z-[300] transition-transform duration-200 pointer-events-auto ${isDragging ? 'cursor-grabbing scale-105 opacity-80' : 'cursor-grab hover:scale-105'}`}
+      style={{ left: pos.x, top: pos.y, transform: 'translate(-50%, -50%)' }}
     >
-      <div className="relative w-12 h-12 flex items-center justify-center">
-        {/* Outer Glow (High Contrast) */}
-        <div className="absolute inset-0 bg-blue-500/30 blur-md rounded-full animate-pulse"></div>
+      <div className="relative group">
+        {/* Interaction Radius Hint */}
+        <div className="absolute -inset-12 bg-blue-500/5 rounded-full border border-blue-500/10 scale-0 group-hover:scale-100 transition-transform duration-500"></div>
         
-        {/* Hexagon Shape - High Opacity */}
-        <div className="absolute inset-1 bg-blue-600 border-2 border-white/40 rotate-45 rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.8)]"></div>
-        
-        {/* Inner Core */}
-        <div className="relative w-4 h-4 bg-white rounded-full shadow-[0_0_10px_#fff] flex items-center justify-center">
-             <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+        {/* Visual Depot */}
+        <Station language={language} />
+
+        {/* Drag Handle Overlay */}
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/80 px-2 py-0.5 rounded border border-white/20 text-[6px] font-bold text-white uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+          {t(language, 'dragHint')}
         </div>
-        
-        {/* Directional Indicator (Small Cog/Train icon feeling) */}
-        <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border border-white/50 flex items-center justify-center text-[8px] font-bold text-white shadow-sm">
-          !
-        </div>
+
+        {/* Landing Pad for Drone */}
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-blue-400/20 rounded-full blur-[2px] animate-pulse"></div>
       </div>
     </div>
   );
