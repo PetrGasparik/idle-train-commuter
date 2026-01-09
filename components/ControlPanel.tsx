@@ -7,9 +7,10 @@ interface ControlPanelProps {
   resources: Resources;
   onChange: (config: TrainConfig) => void;
   onWallpaperChange: (url: string) => void;
+  onPulse: () => void; // Nové: Pro manuální přidání energie
 }
 
-const ControlPanel: React.FC<ControlPanelProps> = ({ config, resources, onChange }) => {
+const ControlPanel: React.FC<ControlPanelProps> = ({ config, resources, onChange, onPulse }) => {
   const [aiPrompt, setAiPrompt] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -24,9 +25,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ config, resources, onChange
   };
 
   return (
-    <div className="w-64 bg-slate-950/80 backdrop-blur-2xl rounded-2xl p-5 text-white shadow-2xl border border-white/10 ring-1 ring-white/5">
-      {/* HUD - Resource Section (Arc I) */}
-      <div className="grid grid-cols-3 gap-2 mb-6 p-2 bg-black/40 rounded-xl border border-white/5">
+    <div className="w-64 bg-slate-950/90 backdrop-blur-3xl rounded-3xl p-6 text-white shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 ring-1 ring-white/5">
+      {/* HUD - Resource Section */}
+      <div className="grid grid-cols-3 gap-2 mb-4 p-2 bg-black/40 rounded-2xl border border-white/5">
         <div className="text-center">
           <p className="text-[7px] uppercase tracking-widest text-blue-400 mb-1">Energy</p>
           <p className="font-mono text-xs font-bold">{Math.floor(resources.energy)}</p>
@@ -41,9 +42,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ config, resources, onChange
         </div>
       </div>
 
+      {/* Pulse Button */}
+      <button 
+        onClick={(e) => { e.stopPropagation(); onPulse(); }}
+        className="w-full mb-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:from-blue-500 hover:to-indigo-500 transition-all active:scale-95 shadow-lg shadow-blue-900/40"
+      >
+        ⚡ Manual Pulse
+      </button>
+
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-[10px] font-black uppercase tracking-[0.25em] text-blue-400">
-          Command Deck
+          SYSTEM CORE
         </h2>
         <div className={`w-2 h-2 rounded-full ${config.speed > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
       </div>
@@ -61,6 +70,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ config, resources, onChange
             onChange={(e) => onChange({...config, speed: Number(e.target.value)})}
             className="w-full accent-blue-500 bg-white/10 rounded-lg appearance-none h-1.5 cursor-pointer"
           />
+        </div>
+
+        {/* Toggle Idle Cruise */}
+        <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+          <span className="text-[9px] uppercase tracking-wider text-white/60">Idle Cruise</span>
+          <button 
+            onClick={() => onChange({...config, idleCruise: !config.idleCruise})}
+            className={`w-8 h-4 rounded-full transition-colors relative ${config.idleCruise ? 'bg-blue-500' : 'bg-white/10'}`}
+          >
+            <div className={`absolute top-1 w-2 h-2 bg-white rounded-full transition-all ${config.idleCruise ? 'left-5' : 'left-1'}`}></div>
+          </button>
         </div>
 
         {/* Length Slider */}
@@ -92,7 +112,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ config, resources, onChange
           <button 
             onClick={handleAiGenerate}
             disabled={loading || !aiPrompt}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-white/5 disabled:text-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+            className="w-full py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-white/5 disabled:text-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
           >
             {loading ? 'Fabricating...' : 'Apply Skin'}
           </button>

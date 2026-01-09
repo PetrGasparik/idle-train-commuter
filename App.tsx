@@ -1,19 +1,27 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { TrainConfig, Position, SmokeParticle, Resources } from './types';
+import { TrainConfig, Position, SmokeParticle, Resources, LogEntry } from './types';
 import TrainCar from './components/TrainCar';
 import ControlPanel from './components/ControlPanel';
+import DraggableAnchor from './components/DraggableAnchor';
+import DesktopSimulator from './components/DesktopSimulator';
 
 const TRACK_MARGIN = 19; 
 const CORNER_RADIUS = 40; 
 const SMOKE_LIFETIME = 1000; 
 
 const App: React.FC = () => {
+  const isElectron = typeof window !== 'undefined' && 
+                     (window as any).process && 
+                     (window as any).process.versions && 
+                     !!(window as any).process.versions.electron;
+
   const [config, setConfig] = useState<TrainConfig>({
-    speed: 4, // Mírně nižší základní rychlost
+    speed: 4,
     carCount: 3,
     carSpacing: 65,
     color: '#3b82f6',
-    type: 'modern'
+    type: 'modern',
+    idleCruise: true
   });
 
   const [uiResources, setUiResources] = useState<Resources>({
@@ -22,8 +30,29 @@ const App: React.FC = () => {
     totalDistance: 0
   });
 
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const isMovingRef = useRef(true);
+  const isAppFocused = useRef(true);
+
+  const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
+    const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const newLog: LogEntry = {
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp,
+      message,
+      type
+    };
+    setLogs(prev => [...prev.slice(-14), newLog]);
+  }, []);
+
+  const [isPanelVisible, setIsPanelVisible] = useState(false);
+  const [anchorPos, setAnchorPos] = useState(() => {
+    const saved = localStorage.getItem('anchorPos');
+    const parsed = saved ? JSON.parse(saved) : null;
+    return parsed || { x: window.innerWidth > 0 ? window.innerWidth - 100 : 800, y: 100 };
+  });
+
   const resourcesRef = useRef<Resources>({ energy: 0, scrap: 0, totalDistance: 0 });
-  // DŮLEŽITÉ: Používáme performance.now() pro konzistenci s requestAnimationFrame
   const lastActivityRef = useRef(performance.now());
   const distanceRef = useRef(0);
   const smokePuffsRef = useRef<SmokeParticle[]>([]);
@@ -35,14 +64,41 @@ const App: React.FC = () => {
   const lastSmokeTimeRef = useRef<number>(0);
   const nextParticleId = useRef(0);
 
+  const handleManualPulse = useCallback(() => {
+    resourcesRef.current.energy += 25;
+    lastActivityRef.current = performance.now();
+    addLog('MANUAL OVERRIDE: 25 Energy injected', 'success');
+  }, [addLog]);
+
   useEffect(() => {
+    addLog('Perimeter OS initialised', 'success');
+    addLog('Environment: ' + (isElectron ? 'ELECTRON_SHELL' : 'WEB_BROWSER'), 'info');
+
+    // Electron specific listeners
+    if (isElectron) {
+      try {
+        const { ipcRenderer } = (window as any).require('electron');
+        ipcRenderer.on('app-focus-change', (_: any, focused: boolean) => {
+          isAppFocused.current = focused;
+          if (focused) {
+            addLog('INTERFACES_ENGAGED: Input focus restored', 'success');
+            lastActivityRef.current = performance.now();
+          } else {
+            addLog('BACKGROUND_MODE: Monitoring system pulse...', 'warning');
+          }
+        });
+      } catch (e) {}
+    }
+    
     const handleKeyDown = () => {
       resourcesRef.current.energy += 1;
       lastActivityRef.current = performance.now();
+      if (Math.random() > 0.95) addLog('Direct Input Detected', 'input');
     };
     const handleMouseDown = () => {
       resourcesRef.current.scrap += 1;
       lastActivityRef.current = performance.now();
+      if (Math.random() > 0.8) addLog('Activity Signal Captured', 'input');
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -58,7 +114,7 @@ const App: React.FC = () => {
       window.removeEventListener('mousedown', handleMouseDown);
       clearInterval(syncInterval);
     };
-  }, []);
+  }, [addLog, isElectron]);
 
   const getPositionOnPerimeter = (d: number, W: number, H: number): Position => {
     const m = TRACK_MARGIN;
@@ -100,19 +156,25 @@ const App: React.FC = () => {
   const animate = useCallback((time: number) => {
     if (lastTimeRef.current !== 0) {
       const deltaTime = Math.min(time - lastTimeRef.current, 100); 
-      
-      // Výpočet nečinnosti - teď už ve stejných jednotkách (ms)
       const inactivityMs = time - lastActivityRef.current;
       const inactivitySeconds = inactivityMs / 1000;
       
-      // Multiplikátor klesne na 0 po 15 sekundách nečinnosti
-      const activityMultiplier = Math.max(0, 1 - inactivitySeconds / 15);
+      const minMultiplier = config.idleCruise ? 0.35 : 0;
+      // Pokud je okno focused, aktivita klesá pomaleji
+      const decayFactor = isAppFocused.current ? 30 : 15;
+      const activityMultiplier = Math.max(minMultiplier, 1 - inactivitySeconds / decayFactor);
       const effectiveSpeed = config.speed * activityMultiplier;
 
-      // Snížený koeficient z 20 na 12 pro plynulejší jízdu
+      if (effectiveSpeed <= (config.speed * 0.4) && isMovingRef.current && !config.idleCruise) {
+        isMovingRef.current = false;
+        addLog('ENGINE_STANDBY: Low kinetic energy', 'warning');
+      } else if (effectiveSpeed > (config.speed * 0.4) && !isMovingRef.current) {
+        isMovingRef.current = true;
+        addLog('ENGINE_BOOST: Kinetic recovery', 'success');
+      }
+
       const moveAmount = (effectiveSpeed * 12 * deltaTime) / 1000;
       distanceRef.current += moveAmount;
-
       resourcesRef.current.totalDistance += moveAmount / 100;
 
       carRefs.current.forEach((el, i) => {
@@ -124,7 +186,6 @@ const App: React.FC = () => {
         }
       });
 
-      // Kouř se tvoří jen když se vlak hýbe
       if (effectiveSpeed > 0.1) {
         const baseInterval = 150; 
         const smokeInterval = baseInterval / Math.max(0.2, activityMultiplier);
@@ -150,13 +211,12 @@ const App: React.FC = () => {
           lastSmokeTimeRef.current = time;
         }
       } else {
-        // Postupné mizení starého kouře i když vlak stojí
         smokePuffsRef.current = smokePuffsRef.current.filter(p => time - p.createdAt < SMOKE_LIFETIME);
       }
     }
     lastTimeRef.current = time;
     requestRef.current = requestAnimationFrame(animate);
-  }, [config.speed, config.carSpacing]);
+  }, [config.speed, config.carSpacing, config.idleCruise, addLog]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
@@ -174,8 +234,15 @@ const App: React.FC = () => {
     } catch (e) {}
   };
 
+  const handleAnchorPosition = (x: number, y: number) => {
+    setAnchorPos({ x, y });
+    localStorage.setItem('anchorPos', JSON.stringify({ x, y }));
+  };
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-transparent select-none">
+      {!isElectron && <DesktopSimulator logs={logs} />}
+
       <div className="absolute inset-0 pointer-events-none z-[150] overflow-visible">
         {renderPuffs.map(puff => (
           <div key={puff.id} className="absolute flex items-center justify-center will-change-transform" style={{ left: puff.x, top: puff.y, transform: `translate(-50%, -50%) rotate(${puff.rotation}deg)` }}>
@@ -195,8 +262,35 @@ const App: React.FC = () => {
       </div>
 
       <div className="absolute inset-0 pointer-events-none z-[200]">
-        <div className="pointer-events-auto w-fit h-fit absolute top-12 right-12 shadow-2xl" onMouseEnter={() => setIgnoreMouse(false)} onMouseLeave={() => setIgnoreMouse(true)}>
-          <ControlPanel config={config} resources={uiResources} onChange={setConfig} onWallpaperChange={() => {}} />
+        <div 
+          className="pointer-events-auto"
+          onMouseEnter={() => setIgnoreMouse(false)} 
+          onMouseLeave={() => !isPanelVisible && setIgnoreMouse(true)}
+        >
+          <DraggableAnchor 
+            onHover={setIsPanelVisible} 
+            onPositionChange={handleAnchorPosition}
+            initialPos={anchorPos}
+          />
+        </div>
+
+        <div 
+          className={`fixed transition-all duration-300 pointer-events-auto shadow-2xl ${isPanelVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}
+          style={{ 
+            left: Math.max(20, anchorPos.x - 260), 
+            top: anchorPos.y,
+            zIndex: 250
+          }}
+          onMouseEnter={() => { setIsPanelVisible(true); setIgnoreMouse(false); }}
+          onMouseLeave={() => { setIsPanelVisible(false); setIgnoreMouse(true); }}
+        >
+          <ControlPanel 
+            config={config} 
+            resources={uiResources} 
+            onChange={setConfig} 
+            onWallpaperChange={() => {}} 
+            onPulse={handleManualPulse}
+          />
         </div>
       </div>
 

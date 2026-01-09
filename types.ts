@@ -5,6 +5,7 @@ export interface TrainConfig {
   color: string;
   type: 'modern' | 'steam' | 'cargo' | 'ai';
   imageUrl?: string;
+  idleCruise: boolean; // Nové: Vlak nezastaví úplně při nečinnosti
 }
 
 export interface Position {
@@ -27,9 +28,16 @@ export interface SmokeParticle {
 }
 
 export interface Resources {
-  energy: number; // Získáváno z klávesnice
-  scrap: number;  // Získáváno z kliků myší
+  energy: number;
+  scrap: number;
   totalDistance: number;
+}
+
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'input';
 }
 
 export interface AppState {
