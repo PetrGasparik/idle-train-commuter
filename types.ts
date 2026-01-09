@@ -26,8 +26,15 @@ export interface SmokeParticle {
   borderRadius: string;
 }
 
+export interface Resources {
+  energy: number; // Získáváno z klávesnice
+  scrap: number;  // Získáváno z kliků myší
+  totalDistance: number;
+}
+
 export interface AppState {
   config: TrainConfig;
+  resources: Resources;
   isGenerating: boolean;
-  wallpaperUrl: string;
+  lastActivity: number;
 }

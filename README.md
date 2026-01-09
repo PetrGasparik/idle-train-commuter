@@ -1,83 +1,77 @@
-# Desktop Train Perimeter Sim
+# 🚂 Desktop Train Perimeter Sim
 
-An aesthetic, lightweight desktop overlay application that brings a miniature railway to life along the edges of your Windows screen. The train follows your desktop's perimeter, providing a cozy atmosphere while you work.
+An aesthetic, high-performance desktop overlay that brings a miniature, top-down railway to life along the extreme edges of your monitor. Perfect for adding a cozy, "lo-fi" atmosphere to your workspace while you work or relax.
 
-## ✨ Features
+## ✨ Latest Features
 
-- **Edge-Running Simulation**: The train intelligently follows the bounds of your monitor (perimeter).
-- **Smooth Animation**: High-performance rendering with hardware-aware transparency.
-- **Customizable Engine**: 
-  - Adjust velocity (speed) and the number of coupled cars.
-  - Choose from standard color liveries.
-- **AI Generative Skins**: Powered by **Google Gemini 2.5 Flash**, you can generate custom high-quality train textures by typing prompts (e.g., "Steampunk", "Cyberpunk", "Lego").
-- **Dynamic Smoke**: Real-time particle effects that react to the train's speed.
-- **Transparent Overlay**: Non-intrusive design that stays on top but lets you click through to your windows.
+- **Precision Perimeter Tracking**: The train intelligently navigates the exact bounds of your primary display, including smooth interpolation around corners.
+- **Organic Smoke System**: 
+  - **High-Frequency Emission**: Realistic, dense trails that react to the train's velocity.
+  - **Unique Puff Geometry**: Every smoke cloud is procedurally generated with a random "blob" shape and unique rotation.
+  - **Dynamic Drift**: Particles gently expand and drift away from the tracks before fading out.
+- **AI-Powered Generative Skins**:
+  - Integrated with **Google Gemini 2.5 Flash**.
+  - Describe any theme (e.g., "Cyberpunk Neon", "Classic Wood", "Lego Blocks") and the AI will synthesize a custom top-down texture for your train.
+- **Aesthetic Control Panel**: A glassmorphism-inspired UI (top-right) allows real-time adjustment of speed, train length, and livery without interrupting your workflow.
+- **Transparent "Click-Through" Architecture**: The train itself is a non-intrusive ghost layer; your mouse clicks pass through the tracks to your underlying apps, while the Control Panel remains interactive.
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18 or higher recommended)
+- [Node.js](https://nodejs.org/) (v18+)
 - [npm](https://www.npmjs.com/)
-- A **Google Gemini API Key** (required for the AI Skin feature)
+- A **Google Gemini API Key** (for generative skins)
 
 ### Installation
 
-1. Clone or download the project files.
-2. Open your terminal in the project root folder.
-3. Install dependencies:
+1. Clone the repository.
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-### Configuration
+### Running the App
 
-The application requires an API key for the AI generation feature.
-- Ensure your Gemini API Key is available as an environment variable named `API_KEY`.
-- For development, you can create a `.env` file in the root directory:
-  ```env
-  API_KEY=your_actual_api_key_here
-  ```
-
-## 🛠️ Usage Instructions
-
-### Running in Development Mode
-To run the app with hot-reloading (Vite + Electron):
+To start the development environment:
 ```bash
-# In one terminal start Vite
+# Terminal 1: Vite HMR
 npm run dev
 
-# In another terminal start Electron
+# Terminal 2: Electron Shell
 npm start
 ```
 
-### Building the Portable Windows (.exe)
-To create a standalone portable application for Windows:
-```bash
-npm run build-exe
-```
-The output will be located in the `/release` directory as a `Portable` executable.
+## 🛠️ Configuration
 
-## 🎮 Controls
+The app automatically detects your screen resolution. For the AI skin generation, ensure your environment has access to the `API_KEY`.
+- You can create a `.env` file in the root:
+  ```env
+  API_KEY=your_gemini_api_key
+  ```
 
-- **Velocity**: Controls how fast the train moves around your screen.
-- **Coupled Cars**: Increases or decreases the length of the train.
-- **Standard Livery**: Quick-toggle between classic colors.
-- **AI Skin**: Type a theme and click "Apply AI Skin" to have Gemini design a unique look for your train.
+## 🎮 Features & Controls
 
-## 📝 Troubleshooting
+| Feature | Description |
+| :--- | :--- |
+| **Velocity Control** | Adjust speed from a slow crawl to a high-speed express. |
+| **Train Length** | Add up to 15 coupled cars to your engine. |
+| **Livery Toggle** | Switch between five high-contrast classic railway colors. |
+| **AI Synthesis** | Enter a prompt to generate professional game-asset-style textures. |
 
-- **Black Background**: If the background isn't transparent, ensure your Windows "Transparency effects" are enabled in System Settings. The app is optimized to disable GPU compositing on certain hardware to prevent this issue.
-- **Click-Through**: The train itself and the background are "click-through". Only the **Control Panel** (top-right) will capture mouse clicks.
-- **AI Not Working**: Ensure your `API_KEY` is valid and you have an active internet connection.
+## 📝 Technical Notes (Windows)
 
-## 🛠️ Tech Stack
+- **Transparency**: If the background appears black, ensure "Transparency effects" are toggled **ON** in Windows Personalization settings.
+- **Performance**: Hardware acceleration is disabled by default to ensure maximum compatibility with transparent window layering on various GPUs.
+- **Always on Top**: The train uses the `screen-saver` priority level to stay visible above most applications and taskbars.
 
-- **Framework**: React 19
-- **Build Tool**: Vite 5
+## 🏗️ Tech Stack
+
+- **Core**: React 19 + TypeScript
+- **Engine**: Custom RequestAnimationFrame physics loop
 - **Shell**: Electron 28
 - **Styling**: Tailwind CSS
-- **AI Engine**: Google Gemini API (@google/genai)
+- **Intelligence**: Google Gemini API (@google/genai)
 
 ---
-*Note: This application is designed for Windows. While it may run on Linux/macOS, transparency and "Always on Top" behaviors are optimized for the Windows Desktop environment.*
+*Created with ❤️ for a more magical desktop experience.*
