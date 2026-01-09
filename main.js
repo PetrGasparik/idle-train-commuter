@@ -23,17 +23,22 @@ function createWindow() {
     },
   });
 
-  // Tato funkce umožní klikat skrz okno na plochu pod ním
-  // Druhý parametr 'forward' zajistí, že události pohybu myši stále chodí do aplikace
   win.setIgnoreMouseEvents(true, { forward: true });
 
-  win.loadFile('index.html');
+  // V produkci načítáme z 'dist/index.html', při vývoji (pokud bys chtěl) z lokálního serveru
+  const isDev = !app.isPackaged;
+  if (isDev) {
+    // V devu bys mohl použít win.loadURL('http://localhost:5173')
+    win.loadFile('index.html'); 
+  } else {
+    win.loadFile(path.join(__dirname, 'dist/index.html'));
+  }
+
   win.setMenu(null);
 
-  // Přepínání ignorování myši (voláno z Reactu)
   ipcMain.on('set-ignore-mouse-events', (event, ignore, forward) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    win.setIgnoreMouseEvents(ignore, { forward: forward });
+    if (win) win.setIgnoreMouseEvents(ignore, { forward: forward });
   });
 
   ipcMain.on('quit-app', () => {
@@ -41,12 +46,10 @@ function createWindow() {
   });
 }
 
-// Nutné pro průhlednost na některých systémech
 app.commandLine.appendSwitch('enable-transparent-visuals');
-app.disableHardwareAcceleration(); // Někdy pomáhá s artefakty u průhlednosti
+app.disableHardwareAcceleration();
 
 app.whenReady().then(() => {
-  // Počkáme chvíli, než se systém inicializuje
   setTimeout(createWindow, 500);
 });
 
