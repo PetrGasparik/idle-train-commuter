@@ -1,0 +1,5 @@
+{
+  "name": "Desktop Train Perimeter Sim",
+  "description": "A top-down train simulation that runs along the edges of a virtual Windows desktop. Features customizable trains and AI-powered skin generation.",
+  "requestFramePermissions": []
+}

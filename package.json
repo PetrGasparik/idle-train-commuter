@@ -1,0 +1,22 @@
+
+{
+  "name": "desktop-train-sim",
+  "version": "1.0.0",
+  "description": "Top-down train simulation for your desktop perimeter",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build-exe": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.railway.desktop.sim",
+    "win": {
+      "target": "portable",
+      "icon": "icon.ico"
+    }
+  }
+}
