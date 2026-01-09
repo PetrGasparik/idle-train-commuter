@@ -12,18 +12,18 @@ const Track: React.FC = () => {
 
   return (
     <div className="absolute inset-0 pointer-events-none z-40 overflow-hidden">
-      {/* Hlavní kolejnice */}
-      <div className="absolute inset-[14px] border border-white/10 rounded-sm"></div>
-      <div className="absolute inset-[26px] border border-white/10 rounded-sm"></div>
+      {/* Hlavní kolejnice s velkým poloměrem zakulacení */}
+      <div className="absolute inset-[13px] border border-white/10 rounded-[45px]"></div>
+      <div className="absolute inset-[27px] border border-white/10 rounded-[35px]"></div>
 
-      {/* Pražce (Sleepers) */}
-      <div className="absolute top-0 left-0 right-0 h-[40px] opacity-100" style={sleeperStyle}></div>
-      <div className="absolute bottom-0 left-0 right-0 h-[40px] opacity-100" style={sleeperStyle}></div>
-      <div className="absolute top-0 bottom-0 left-0 w-[40px] opacity-100" style={sleeperStyleVert}></div>
-      <div className="absolute top-0 bottom-0 right-0 w-[40px] opacity-100" style={sleeperStyleVert}></div>
+      {/* Pražce - nyní omezené pouze na rovinky pomocí marginu */}
+      <div className="absolute top-0 left-[60px] right-[60px] h-[40px] opacity-100" style={sleeperStyle}></div>
+      <div className="absolute bottom-0 left-[60px] right-[60px] h-[40px] opacity-100" style={sleeperStyle}></div>
+      <div className="absolute top-[60px] bottom-[60px] left-0 w-[40px] opacity-100" style={sleeperStyleVert}></div>
+      <div className="absolute top-[60px] bottom-[60px] right-0 w-[40px] opacity-100" style={sleeperStyleVert}></div>
       
       {/* Vnitřní stín pro hloubku */}
-      <div className="absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.2)]"></div>
+      <div className="absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.1)]"></div>
     </div>
   );
 };
