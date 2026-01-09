@@ -1,6 +1,7 @@
 
 # Závislosti
 node_modules/
+package-lock.json
 
 # Build výstupy (Electron & Vite)
 dist/
@@ -28,4 +29,3 @@ Thumbs.db
 .env.development.local
 .env.test.local
 .env.production.local
-package-lock.json
