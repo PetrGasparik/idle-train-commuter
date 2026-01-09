@@ -1,3 +1,4 @@
+
 # 🚂 Desktop Train Perimeter Sim
 
 An aesthetic, high-performance desktop overlay that brings a miniature, top-down railway to life along the extreme edges of your monitor. Optimized for a compact "lo-fi" workspace atmosphere.
@@ -5,40 +6,29 @@ An aesthetic, high-performance desktop overlay that brings a miniature, top-down
 ## ✨ Core Features
 
 - **Sector 01 - Draggable Command Post**:
-  - The entire UI anchor is now a physical "Station" structure on your desktop.
-  - **Draggable**: Grab the station to reposition your entire control hub anywhere on the screen.
-  - **Integrated Hub**: The control panel slides out directly from the base's coordinates.
+  - The entire UI anchor is a physical "Station" structure on your desktop.
+  - **Click-Through Optimized**: Clicks pass through to background apps unless hovering over UI.
+  - **Draggable**: Grab the station to reposition your entire control hub. It remembers its position.
 
-- **The Overseer Drone (V2)**:
-  - **Direct Intercept**: No longer follows the tracks; the drone calculates the shortest flight path from the Command Post to the locomotive.
-  - **Automated Life Support**: Intercepts the train when energy falls below 15%.
-  - **Visual Feedback**: Features a dynamic light trail and "riding" mode when attached to the train.
+- **Idle Economy (V3)**:
+  - **Passive Income**: Residential/Habitat wagons generate Scrap Metal while the train is in motion.
+  - **Mining Multiplier**: Mining wagons boost the scrap yield of manual mouse clicks by 50%.
+  - **Neural Fabricator**: Use Gemini 2.5 Flash to synthesize custom top-down skins for your locomotive.
 
-- **Multi-Spectrum Energy HUD**:
-  - **Adaptive Visuals**: The locomotive's headlights and internal glow change color based on fuel levels (**Green** > 60%, **Amber** 20-60%, **Red** < 20%).
-  - **Critical Pulse**: In low energy states, the locomotive pulses red as a distress signal.
-
-- **Refined Lo-Fi Aesthetic**:
-  - **Compact Scale**: Smaller, more detailed train cars and station for a less intrusive desktop presence.
-  - **Enhanced Atmosphere**: Dense, opaque smoke trails with procedural "blob" geometry for a satisfying mechanical feel.
-
-- **AI-Powered Generative Skins**:
-  - Integrated with **Google Gemini 2.5 Flash**.
-  - Synthesize custom top-down textures via natural language prompts.
-
-## 🚀 Quick Start
-
-1. Install dependencies: `npm install`
-2. Run development: `npm run dev` and `npm start`
-3. **Pro Tip**: Drag the "Command Post" to your preferred corner of the screen. It will remember its position.
+- **The Overseer Drone**:
+  - **Automated Life Support**: Intercepts the train when energy falls below 15% for rapid refueling.
+  - **Direct Intercept**: Calculates shortest flight paths from Command Post to the train.
 
 ## 🎮 Mechanics & Resources
 
 | Resource | Source | Use |
 | :--- | :--- | :--- |
-| **Energy** | Keyboards / Manual Pulse / Drone | Multiplies speed and changes visual "aura" of the train. |
-| **Scrap** | Mouse clicks / Idle collection | Used to purchase Wagon segments (10 SC) or Efficiency Cores (25 SC). |
-| **Overseer** | Automated (Low Energy Trigger) | Direct flight refueling to ensure continuous operation. |
+| **Energy** | Keyboard input / Manual Pulse / Drone | Movement speed and visual glow (Green/Amber/Red). |
+| **Scrap** | Mouse clicks / Residential Wagons | Buy Wagons (10 SC), Mining (15 SC), Habitats (20 SC), or Efficiency. |
+| **Overseer** | Command Post | Automated refueling drone. |
+
+## 🛠 Stability Note
+If the Command Post disappears, ensure you haven't changed monitor configurations. The system now includes an "Auto-Rescue" feature that resets the position if it's detected off-screen.
 
 ---
 *Created with ❤️ for a more magical desktop experience.*

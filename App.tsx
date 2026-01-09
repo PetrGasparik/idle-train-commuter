@@ -24,7 +24,7 @@ const App: React.FC = () => {
 
   const [config, setConfig] = useState<TrainConfig>({
     speed: 6,
-    cars: ['standard', 'residential'], // Starts with Locomotive + Residential wagon
+    cars: ['standard', 'residential'],
     carSpacing: 50, 
     color: '#3b82f6',
     type: 'modern',
@@ -39,15 +39,18 @@ const App: React.FC = () => {
 
   const [anchorPos, setAnchorPos] = useState(() => {
     const saved = localStorage.getItem('anchorPos');
-    return saved ? JSON.parse(saved) : { x: 80, y: 80 };
-  });
-
-  const [worker, setWorker] = useState<WorkerState>({
-    status: 'sleeping',
-    x: anchorPos.x,
-    y: anchorPos.y,
-    rotation: 0,
-    lastAction: Date.now()
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Robust check: Ensure position is within viewport
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number' && 
+            parsed.x > 0 && parsed.x < window.innerWidth &&
+            parsed.y > 0 && parsed.y < window.innerHeight) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return { x: 100, y: 100 };
   });
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -115,7 +118,7 @@ const App: React.FC = () => {
         
         setConfig(prev => ({ 
           ...prev, 
-          cars: [...prev.cars, wagonType].slice(0, 15) // Limit 15 cars
+          cars: [...prev.cars, wagonType].slice(0, 15) 
         }));
         addLog(logKey, 'success');
       }
@@ -140,7 +143,6 @@ const App: React.FC = () => {
     };
 
     const handleMouseDown = () => {
-      // Calculate mining bonus
       const miningWagons = config.cars.filter(c => c === 'mining').length;
       const multiplier = 1 + (miningWagons * 0.5);
       resourcesRef.current.scrap += (0.5 * multiplier);
@@ -152,7 +154,7 @@ const App: React.FC = () => {
     
     const syncInterval = setInterval(() => {
       setUiResources({ ...resourcesRef.current });
-      setWorker({ ...workerRef.current });
+      // Fix: Removed non-existent setWorker call as the drone's position is managed via workerVisualRef in animate().
       setRenderPuffs([...smokePuffsRef.current]);
     }, 50);
 
@@ -219,7 +221,6 @@ const App: React.FC = () => {
 
       const isActuallyMoving = effectiveSpeed > 0.1;
 
-      // PASSIVE REVENUE (Residential Wagons)
       if (isActuallyMoving) {
         const residentialWagons = config.cars.filter(c => c === 'residential').length;
         resourcesRef.current.scrap += (residentialWagons * 0.0001 * deltaTime); 
@@ -362,40 +363,42 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      {/* Interactive Layer */}
-      <div className="absolute inset-0 pointer-events-none z-[200]">
+      {/* Interactive Hub Layer */}
+      <div 
+        className="absolute inset-0 pointer-events-none z-[200]"
+        onMouseEnter={() => setIgnoreMouse(false)}
+        onMouseLeave={() => !isPanelVisible && setIgnoreMouse(true)}
+      >
         <div 
-          className="pointer-events-auto absolute" 
-          style={{ left: anchorPos.x, top: anchorPos.y, transform: 'translate(-50%, -50%)' }}
-          onMouseEnter={() => setIgnoreMouse(false)} 
-          onMouseLeave={() => !isPanelVisible && setIgnoreMouse(true)}
+          className="absolute" 
+          style={{ left: anchorPos.x, top: anchorPos.y }}
         >
           <DraggableAnchor 
             language={language}
             onHover={setIsPanelVisible} 
             onPositionChange={(x, y) => setAnchorPos({x, y})} 
             initialPos={anchorPos} 
+            setIgnoreMouse={setIgnoreMouse}
           />
+          
+          {isPanelVisible && (
+            <div 
+              className="absolute left-10 -top-20 transition-all duration-300 pointer-events-auto shadow-2xl opacity-100 translate-y-0" 
+              onMouseEnter={() => { setIsPanelVisible(true); setIgnoreMouse(false); }} 
+              onMouseLeave={() => { setIsPanelVisible(false); setIgnoreMouse(true); }}
+            >
+              <ControlPanel 
+                config={config} 
+                resources={uiResources} 
+                language={language}
+                onLanguageChange={setLanguage}
+                onChange={setConfig} 
+                onPulse={handleManualPulse} 
+                onUpgrade={handleUpgrade} 
+              />
+            </div>
+          )}
         </div>
-        
-        {isPanelVisible && (
-          <div 
-            className="fixed transition-all duration-300 pointer-events-auto shadow-2xl opacity-100 translate-y-0" 
-            style={{ left: anchorPos.x + 30, top: anchorPos.y - 80 }} 
-            onMouseEnter={() => { setIsPanelVisible(true); setIgnoreMouse(false); }} 
-            onMouseLeave={() => { setIsPanelVisible(false); setIgnoreMouse(true); }}
-          >
-            <ControlPanel 
-              config={config} 
-              resources={uiResources} 
-              language={language}
-              onLanguageChange={setLanguage}
-              onChange={setConfig} 
-              onPulse={handleManualPulse} 
-              onUpgrade={handleUpgrade} 
-            />
-          </div>
-        )}
       </div>
 
       <style>{`
