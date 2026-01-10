@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { TrainConfig, Position, SmokeParticle, Resources, LogEntry, WorkerState, Language, CarType } from './types';
 import TrainCar from './components/TrainCar';
 import ControlPanel from './components/ControlPanel';
@@ -77,6 +77,7 @@ const App: React.FC = () => {
   const lastTimeRef = useRef<number>(0);
   const lastSmokeTimeRef = useRef<number>(0);
   const nextParticleId = useRef(0);
+  const lastMouseUpdateRef = useRef<number>(0);
 
   useEffect(() => {
     anchorPosRef.current = anchorPos;
@@ -132,30 +133,34 @@ const App: React.FC = () => {
     } catch (e) {}
   }, [isElectron]);
 
-  // Handle panel visibility with a grace period
-  const showHub = () => {
+  const showHub = useCallback(() => {
     if (hoverTimeoutRef.current) {
       window.clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
     }
     setIsPanelVisible(true);
     setIgnoreMouse(false);
-  };
+  }, [setIgnoreMouse]);
 
-  const hideHub = () => {
+  const hideHub = useCallback(() => {
+    if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
     hoverTimeoutRef.current = window.setTimeout(() => {
       setIsPanelVisible(false);
       setIgnoreMouse(true);
-    }, 300); // 300ms window to cross the gap
-  };
+    }, 300);
+  }, [setIgnoreMouse]);
 
   useEffect(() => {
     if (!isElectron) return;
 
     const handleGlobalMouseMove = (e: MouseEvent) => {
+      // Throttle mouse detection to every 50ms to save CPU
+      const now = performance.now();
+      if (now - lastMouseUpdateRef.current < 50) return;
+      lastMouseUpdateRef.current = now;
+
       const target = e.target as HTMLElement;
       const isInteractive = !!target.closest('.pointer-events-auto');
-      // Only modify ignore state if we are NOT currently interacting with the hub
       if (!isPanelVisible) {
         setIgnoreMouse(!isInteractive);
       }
@@ -192,10 +197,12 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('mousedown', handleMouseDown);
     
+    // Slower sync interval for non-visual resources to reduce render frequency
     const syncInterval = setInterval(() => {
       setUiResources({ ...resourcesRef.current });
+      // Filter expired puffs less frequently
       setRenderPuffs([...smokePuffsRef.current]);
-    }, 100);
+    }, 150);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -345,7 +352,7 @@ const App: React.FC = () => {
           scale: 0.6 + Math.random() * 0.6, randomRotation: Math.random() * 360,
           driftX: (Math.random() - 0.5) * 30, driftY: (Math.random() - 0.5) * 30, borderRadius: '50%'
         };
-        smokePuffsRef.current = [...smokePuffsRef.current.filter(p => time - p.createdAt < SMOKE_LIFETIME), newPuff];
+        smokePuffsRef.current = [...smokePuffsRef.current.filter(p => time - p.createdAt < SMOKE_LIFETIME), newPuff].slice(-50); // Hard limit smoke
         lastSmokeTimeRef.current = time;
       }
     }

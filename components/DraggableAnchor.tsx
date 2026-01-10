@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import Station from './Station';
 import { Language } from '../types';
 import { t } from '../locales';
@@ -12,7 +12,7 @@ interface DraggableAnchorProps {
   setIgnoreMouse: (ignore: boolean) => void;
 }
 
-const DraggableAnchor: React.FC<DraggableAnchorProps> = ({ 
+const DraggableAnchor: React.FC<DraggableAnchorProps> = memo(({ 
   language, onHover, onPositionChange, initialPos, setIgnoreMouse 
 }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -20,7 +20,6 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = ({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
-    // Explicitly stop ignoring mouse during drag
     setIgnoreMouse(false);
     
     dragStartOffset.current = {
@@ -38,7 +37,6 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = ({
       const newX = e.clientX - dragStartOffset.current.x;
       const newY = e.clientY - dragStartOffset.current.y;
       
-      // Bounding logic to keep it visible on screen
       const boundedX = Math.max(40, Math.min(window.innerWidth - 40, newX));
       const boundedY = Math.max(40, Math.min(window.innerHeight - 40, newY));
       
@@ -79,22 +77,15 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = ({
       style={{ transform: 'translate(-50%, -50%)' }}
     >
       <div className="relative group">
-        {/* Interaction Radius Hint */}
         <div className="absolute -inset-14 bg-blue-500/5 rounded-full border border-blue-500/10 scale-0 group-hover:scale-100 transition-transform duration-500 pointer-events-none"></div>
-        
-        {/* Visual Depot */}
         <Station language={language} />
-
-        {/* Drag Handle Overlay */}
         <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-black/90 px-3 py-1 rounded-full border border-white/20 text-[7px] font-black text-white uppercase tracking-widest shadow-xl opacity-0 group-hover:opacity-100 transition-all transform translate-y-1 group-hover:translate-y-0 whitespace-nowrap">
           {t(language, 'dragHint')}
         </div>
-
-        {/* Landing Pad for Drone */}
         <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-10 h-1.5 bg-blue-400/30 rounded-full blur-[3px] animate-pulse"></div>
       </div>
     </div>
   );
-};
+});
 
 export default DraggableAnchor;

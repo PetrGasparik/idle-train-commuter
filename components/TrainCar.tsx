@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { memo } from 'react';
 import { TrainConfig, CarType } from '../types';
 
 interface TrainCarProps {
@@ -9,7 +9,7 @@ interface TrainCarProps {
   energy?: number;
 }
 
-const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive, carType = 'standard', energy = 100 }) => {
+const TrainCar: React.FC<TrainCarProps> = memo(({ config, isLocomotive, carType = 'standard', energy = 100 }) => {
   const width = isLocomotive ? 48 : 40;
   const height = 18;
 
@@ -107,6 +107,6 @@ const TrainCar: React.FC<TrainCarProps> = ({ config, isLocomotive, carType = 'st
       </div>
     </div>
   );
-};
+});
 
 export default TrainCar;

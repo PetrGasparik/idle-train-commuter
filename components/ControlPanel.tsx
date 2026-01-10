@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { TrainConfig, Resources, Language, CarType } from '../types';
 import { generateTrainSkin } from '../services/gemini';
 import { t } from '../locales';
@@ -14,7 +14,7 @@ interface ControlPanelProps {
   onUpgrade: (type: 'wagon' | 'fuel' | 'mining' | 'residential') => void;
 }
 
-const ControlPanel: React.FC<ControlPanelProps> = ({ 
+const ControlPanel: React.FC<ControlPanelProps> = memo(({ 
   config, resources, language, onLanguageChange, onChange, onPulse, onUpgrade 
 }) => {
   const [aiPrompt, setAiPrompt] = useState('');
@@ -171,6 +171,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default ControlPanel;
