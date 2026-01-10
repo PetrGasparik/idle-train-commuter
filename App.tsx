@@ -10,6 +10,9 @@ import { t } from './locales';
 
 const SMOKE_LIFETIME = 1200; 
 const MAX_PARTICLES = 30; 
+const GLITCH_THRESHOLD = 92; 
+const MAX_STORM_DURATION = 5; // Seconds before meltdown
+const MAX_WAGONS = 30;
 
 const App: React.FC = () => {
   const isElectron = typeof window !== 'undefined' && 
@@ -33,7 +36,7 @@ const App: React.FC = () => {
     cornerRadius: 30,
     cpuUpgradeLevel: 0,
     uiScale: 1.0,
-    panelWidth: 288 // Default w-72 equivalent
+    panelWidth: 288 
   });
 
   const [uiResources, setUiResources] = useState<Resources>({
@@ -42,6 +45,7 @@ const App: React.FC = () => {
     totalDistance: 0
   });
 
+  const [isDerailed, setIsDerailed] = useState(false);
   const [efficiencyLevel, setEfficiencyLevel] = useState(0);
 
   const [hwStats, setHwStats] = useState<HardwareStats & { isReal?: boolean }>({
@@ -51,7 +55,7 @@ const App: React.FC = () => {
     isReal: false
   });
 
-  const [isGodModeVisible, setIsGodModeVisible] = useState(true);
+  const [isGodModeVisible, setIsGodModeVisible] = useState(false);
 
   const [anchorPos, setAnchorPos] = useState(() => {
     const saved = localStorage.getItem('anchorPos');
@@ -68,33 +72,48 @@ const App: React.FC = () => {
   const [isPanelVisible, setIsPanelVisible] = useState(false);
   const hideTimeoutRef = useRef<number | null>(null);
 
+  const setIgnoreMouse = useCallback((ignore: boolean) => {
+    if (!isElectron) return;
+    try { 
+      const { ipcRenderer } = (window as any).require('electron');
+      ipcRenderer.send('set-ignore-mouse-events', ignore, true);
+    } catch (e) {}
+  }, [isElectron]);
+
   const showHub = useCallback(() => {
     if (hideTimeoutRef.current !== null) {
       window.clearTimeout(hideTimeoutRef.current);
       hideTimeoutRef.current = null;
     }
     setIsPanelVisible(true);
-  }, []);
+    setIgnoreMouse(false);
+  }, [setIgnoreMouse]);
 
   const toggleHub = useCallback(() => {
     if (hideTimeoutRef.current !== null) {
       window.clearTimeout(hideTimeoutRef.current);
       hideTimeoutRef.current = null;
     }
-    setIsPanelVisible(prev => !prev);
-  }, []);
+    const next = !isPanelVisible;
+    setIsPanelVisible(next);
+    setIgnoreMouse(!next);
+  }, [isPanelVisible, setIgnoreMouse]);
 
   const startHideTimer = useCallback(() => {
     if (hideTimeoutRef.current !== null) window.clearTimeout(hideTimeoutRef.current);
     hideTimeoutRef.current = window.setTimeout(() => {
       setIsPanelVisible(false);
+      setIgnoreMouse(true);
       hideTimeoutRef.current = null;
     }, 1000);
-  }, []);
+  }, [setIgnoreMouse]);
   
   const resourcesRef = useRef<Resources>({ energy: 40, scrap: 0, totalDistance: 0 });
   const efficiencyRef = useRef(0);
   const hwStatsRef = useRef<HardwareStats & { isReal?: boolean }>({ cpu: 10, ram: 30, temp: 45, isReal: false });
+  const isDerailedRef = useRef(false);
+  const stormDurationRef = useRef(0);
+
   const workerRef = useRef<WorkerState>({ 
     status: 'sleeping', 
     x: anchorPos.x, 
@@ -145,6 +164,10 @@ const App: React.FC = () => {
   }, [efficiencyLevel]);
 
   useEffect(() => {
+    isDerailedRef.current = isDerailed;
+  }, [isDerailed]);
+
+  useEffect(() => {
     if (!isElectron) return;
     try {
       const { ipcRenderer } = (window as any).require('electron');
@@ -165,6 +188,7 @@ const App: React.FC = () => {
   }, [language]);
 
   const handleManualPulse = useCallback(() => {
+    if (isDerailedRef.current) return;
     resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 5);
     boostImpulseRef.current += 30; 
     
@@ -179,6 +203,13 @@ const App: React.FC = () => {
     addLog('logManualFuel', 'success');
   }, [addLog, config.cars]);
 
+  const handleRebootRequest = useCallback(() => {
+    if (!isDerailedRef.current || workerRef.current.status !== 'sleeping') return;
+    workerRef.current.status = 'rebooting';
+    workerRef.current.lastAction = Date.now();
+    addLog('logDroneReboot', 'info');
+  }, [addLog]);
+
   const handleGodAddScrap = useCallback(() => {
     resourcesRef.current.scrap += 999;
     setUiResources(prev => ({ ...prev, scrap: resourcesRef.current.scrap }));
@@ -187,6 +218,12 @@ const App: React.FC = () => {
   const handleUpgrade = useCallback((type: 'wagon' | 'fuel' | 'mining' | 'residential' | 'cpu') => {
     const costs = { wagon: 10, fuel: 25, mining: 15, residential: 20, cpu: 30 };
     if (resourcesRef.current.scrap >= costs[type]) {
+      if (type === 'wagon' || type === 'mining' || type === 'residential') {
+        if (config.cars.length >= MAX_WAGONS) {
+          addLog('logMaxWagons', 'warning');
+          return;
+        }
+      }
       resourcesRef.current.scrap -= costs[type];
       if (type === 'fuel') {
         setEfficiencyLevel(prev => prev + 1);
@@ -196,19 +233,11 @@ const App: React.FC = () => {
         addLog('logCpuUpgrade', 'success');
       } else {
         const wagonType: CarType = type === 'mining' ? 'mining' : type === 'residential' ? 'residential' : 'standard';
-        setConfig(prev => ({ ...prev, cars: [...prev.cars, wagonType].slice(0, 15) }));
+        setConfig(prev => ({ ...prev, cars: [...prev.cars, wagonType].slice(0, MAX_WAGONS) }));
         addLog(type === 'mining' ? 'logMiningWagon' : type === 'residential' ? 'logResidentialWagon' : 'logWagon', 'success');
       }
     }
-  }, [addLog]);
-
-  const setIgnoreMouse = useCallback((ignore: boolean) => {
-    if (!isElectron) return;
-    try { 
-      const { ipcRenderer } = (window as any).require('electron');
-      ipcRenderer.send('set-ignore-mouse-events', ignore, true);
-    } catch (e) {}
-  }, [isElectron]);
+  }, [addLog, config.cars.length]);
 
   const getPositionOnPerimeter = (d: number): Position => {
     const { width: W, height: H, perimeter } = metricsRef.current;
@@ -251,16 +280,18 @@ const App: React.FC = () => {
       const deltaTime = Math.min(time - lastTimeRef.current, 100); 
       const inactivitySeconds = (time - lastActivityRef.current) / 1000;
       const { perimeter } = metricsRef.current;
+      
       const tempThrottling = hwStatsRef.current.temp > 85 ? 0.6 : 1.0;
       const energyFactor = resourcesRef.current.energy > 0 ? (0.2 + (resourcesRef.current.energy / 100) * 0.8) : 0;
-      let effectiveSpeed = config.speed * energyFactor * tempThrottling;
       
-      if (inactivitySeconds < 2) effectiveSpeed *= Math.max(1, 3 - inactivitySeconds / 10); 
+      let effectiveSpeed = isDerailedRef.current ? 0 : config.speed * energyFactor * tempThrottling;
+      
+      if (!isDerailedRef.current && inactivitySeconds < 2) effectiveSpeed *= Math.max(1, 3 - inactivitySeconds / 10); 
       
       const isActuallyMoving = effectiveSpeed > 0.1;
       let moveAmount = (effectiveSpeed * 12 * deltaTime) / 1000;
       
-      if (boostImpulseRef.current > 0.1) {
+      if (!isDerailedRef.current && boostImpulseRef.current > 0.1) {
         const step = boostImpulseRef.current * 0.2; 
         moveAmount += step;
         boostImpulseRef.current -= step;
@@ -277,7 +308,7 @@ const App: React.FC = () => {
       const consumptionPerPixel = (10 / (perimeter || 5000)) * efficiencyMultiplier;
       
       const energyLoss = (isActuallyMoving ? (moveAmount * consumptionPerPixel) : (deltaTime / 20000)) * (1 + Math.max(0, hwStatsRef.current.temp - 40) / 200);
-      resourcesRef.current.energy = Math.max(0, resourcesRef.current.energy - energyLoss);
+      resourcesRef.current.energy = Math.max(0, resourcesRef.current.energy - (isDerailedRef.current ? energyLoss * 2 : energyLoss));
       
       const w = workerRef.current;
       const trainPos = getPositionOnPerimeter(distanceRef.current);
@@ -285,22 +316,29 @@ const App: React.FC = () => {
 
       if (w.status === 'sleeping') {
         w.x = basePos.x; w.y = basePos.y;
-        if (resourcesRef.current.energy < 15 && Date.now() - w.lastAction > 5000) w.status = 'approaching'; 
-      } else if (w.status === 'approaching') {
+        if (!isDerailedRef.current && resourcesRef.current.energy < 15 && Date.now() - w.lastAction > 5000) w.status = 'approaching'; 
+      } else if (w.status === 'approaching' || w.status === 'rebooting') {
         const dx = trainPos.x - w.x; const dy = trainPos.y - w.y; const dist = Math.sqrt(dx*dx + dy*dy);
         w.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
         if (dist < 10) {
+          const isSwap = w.status === 'rebooting';
           w.status = 'refueling';
           setTimeout(() => {
-            resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 70);
+            if (isSwap) {
+              setIsDerailed(false);
+              resourcesRef.current.energy = 40;
+              hwStatsRef.current.cpu = 10;
+              stormDurationRef.current = 0;
+              addLog('logReboot', 'success');
+            } else {
+              resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 70);
+            }
             workerRef.current.status = 'returning';
             workerRef.current.lastAction = Date.now();
-          }, 1000);
+          }, isSwap ? 2000 : 1000);
         } else { w.x += (dx / dist) * (deltaTime * 0.25); w.y += (dy / dist) * (deltaTime * 0.25); }
       } else if (w.status === 'refueling') {
-        w.x = trainPos.x;
-        w.y = trainPos.y;
-        w.rotation = trainPos.rotation;
+        w.x = trainPos.x; w.y = trainPos.y; w.rotation = trainPos.rotation;
       } else if (w.status === 'returning') {
         const dx = basePos.x - w.x; const dy = basePos.y - w.y; const dist = Math.sqrt(dx*dx + dy*dy);
         w.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
@@ -311,10 +349,8 @@ const App: React.FC = () => {
       distanceRef.current += moveAmount;
       resourcesRef.current.totalDistance += moveAmount / 2000;
       
-      // CPU Glitch threshold influenced by upgrade
-      const glitchThreshold = 92 + (config.cpuUpgradeLevel * 4);
-      const isGlitching = hwStatsRef.current.cpu > glitchThreshold;
-      const jitter = isGlitching ? (Math.random() - 0.5) * (hwStatsRef.current.cpu / 15) : 0;
+      const isGlitching = hwStatsRef.current.cpu > GLITCH_THRESHOLD || isDerailedRef.current;
+      const jitter = isGlitching ? (Math.random() - 0.5) * (hwStatsRef.current.cpu / (isDerailedRef.current ? 5 : 15)) : 0;
       
       carRefs.current.forEach((el, i) => {
         if (el) {
@@ -325,12 +361,18 @@ const App: React.FC = () => {
       if (workerVisualRef.current) {
         workerVisualRef.current.style.transform = `translate(${w.x}px, ${w.y}px) translate(-50%, -50%) rotate(${w.rotation}deg)`;
         workerVisualRef.current.style.opacity = w.status === 'sleeping' ? '0.4' : '1';
-        workerVisualRef.current.style.filter = w.status === 'sleeping' ? 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.5))' : 'drop-shadow(0 0 120px #facc15)';
+        
+        // Visuals for reboot mission
+        if (w.status === 'rebooting') {
+           workerVisualRef.current.style.filter = 'drop-shadow(0 0 15px #3b82f6) drop-shadow(0 0 30px #3b82f6)';
+        } else {
+           workerVisualRef.current.style.filter = w.status === 'sleeping' ? 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.5))' : 'drop-shadow(0 0 120px #facc15)';
+        }
       }
-      if (isActuallyMoving && time - lastSmokeTimeRef.current > (150 / (effectiveSpeed/4))) {
+      if ((isActuallyMoving || isDerailedRef.current) && time - lastSmokeTimeRef.current > (150 / (effectiveSpeed/4 || 4))) {
         const lp = getPositionOnPerimeter(distanceRef.current);
         const isStorm = isGlitching;
-        let sColor = isStorm ? 'rgba(56, 189, 248, 0.9)' : (hwStatsRef.current.temp > 80 ? 'rgba(239,68,68,0.7)' : 'rgba(255,255,255,0.7)');
+        let sColor = isDerailedRef.current ? 'rgba(239,68,68,0.9)' : (isStorm ? 'rgba(56, 189, 248, 0.9)' : (hwStatsRef.current.temp > 80 ? 'rgba(239,68,68,0.7)' : 'rgba(255,255,255,0.7)'));
         const newPuff: SmokeParticle = {
           id: nextParticleId.current++,
           x: lp.x + jitter, y: lp.y + jitter, rotation: lp.rotation, createdAt: time,
@@ -351,7 +393,7 @@ const App: React.FC = () => {
         if (el) {
           if (p) {
             const age = (time - p.createdAt) / SMOKE_LIFETIME;
-            const currentScale = p.scale * (0.2 + age * 3);
+            const currentScale = p.scale * (0.2 + age * (isDerailedRef.current ? 6 : 3));
             const currentOpacity = 0.9 * (1 - age);
             el.style.display = 'block';
             el.style.transform = `translate(${p.x + p.driftX * age}px, ${p.y + p.driftY * age}px) translate(-50%, -50%) rotate(${p.rotation}deg) scale(${currentScale})`;
@@ -365,7 +407,7 @@ const App: React.FC = () => {
     }
     lastTimeRef.current = time;
     requestRef.current = requestAnimationFrame(animate);
-  }, [config.speed, config.carSpacing, config.cars, config.trackMargin, config.cornerRadius, config.cpuUpgradeLevel]);
+  }, [config.speed, config.carSpacing, config.cars, config.trackMargin, config.cornerRadius, config.cpuUpgradeLevel, addLog]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
@@ -374,28 +416,33 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const hwSim = setInterval(() => {
+      if (isDerailedRef.current) return;
       const stats = hwStatsRef.current;
-      const wagonLoad = config.cars.length * 3.5;
-      const speedLoad = config.speed * 0.75;
-      const targetCpu = Math.min(100, 5 + wagonLoad + speedLoad);
+      const wagonLoad = config.cars.length * 4.5;
+      const speedLoad = config.speed * 1.2;
+      const cpuEfficiency = Math.pow(0.85, config.cpuUpgradeLevel);
+      const targetCpu = Math.min(100, 5 + (wagonLoad + speedLoad) * cpuEfficiency);
       const jitter = (Math.random() - 0.5) * 4;
       const newCpu = Math.max(2, Math.min(100, stats.cpu + (targetCpu - stats.cpu) * 0.2 + jitter));
       
-      // CPU Upgrade také pomáhá odvádět teplo
-      const tempEfficiency = 1.0 - (config.cpuUpgradeLevel * 0.05);
+      const tempEfficiency = 1.0 - (config.cpuUpgradeLevel * 0.08);
       const targetTemp = 35 + (newCpu * 0.55 * tempEfficiency);
       const newTemp = stats.temp + (targetTemp - stats.temp) * 0.15;
 
-      hwStatsRef.current = { 
-        cpu: newCpu, 
-        ram: Math.min(95, 25 + (config.cars.length * 2.5)), 
-        temp: newTemp, 
-        isReal: false 
-      };
+      hwStatsRef.current = { cpu: newCpu, ram: Math.min(95, 25 + (config.cars.length * 2.5)), temp: newTemp, isReal: hwStatsRef.current.isReal };
       setHwStats({ ...hwStatsRef.current });
 
-      const glitchThreshold = 92 + (config.cpuUpgradeLevel * 4);
-      if (newCpu > glitchThreshold) addLog('logCpuStorm', 'warning');
+      if (newCpu > GLITCH_THRESHOLD) {
+        stormDurationRef.current += 1;
+        if (stormDurationRef.current >= MAX_STORM_DURATION) {
+          setIsDerailed(true);
+          addLog('logMeltdown', 'warning');
+        } else {
+          addLog('logCpuStorm', 'warning');
+        }
+      } else {
+        stormDurationRef.current = Math.max(0, stormDurationRef.current - 0.5);
+      }
     }, 1000); 
     return () => clearInterval(hwSim);
   }, [config.cars.length, config.speed, config.cpuUpgradeLevel, addLog]);
@@ -405,28 +452,27 @@ const App: React.FC = () => {
     return () => { clearInterval(syncInterval); };
   }, []);
 
-  const glitchThreshold = 92 + config.cpuUpgradeLevel * 4;
-  const glitchActive = hwStats.cpu > glitchThreshold;
+  const glitchActive = hwStats.cpu > GLITCH_THRESHOLD || isDerailed;
 
   return (
     <div className={`relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none ${glitchActive ? 'glitch-active' : ''}`}>
       {!isElectron && <DesktopSimulator logs={logs} language={language} />}
       
-      <GodModeOverlay 
-        isVisible={isGodModeVisible} 
-        onToggle={() => setIsGodModeVisible(!isGodModeVisible)}
-        onAddScrap={handleGodAddScrap}
-        setIgnoreMouse={setIgnoreMouse}
-      />
+      <GodModeOverlay isVisible={isGodModeVisible} onToggle={() => setIsGodModeVisible(!isGodModeVisible)} onAddScrap={handleGodAddScrap} setIgnoreMouse={setIgnoreMouse} />
 
+      {/* Robot Drone */}
       <div ref={workerVisualRef} className="absolute z-[110] pointer-events-none transition-opacity duration-300">
         <div className="relative">
+          {workerRef.current.status === 'rebooting' && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-blue-500/30 blur-md animate-pulse"></div>
+          )}
           <div className="absolute top-1/2 right-1/2 -translate-y-1/2 w-4 h-0.5 bg-blue-400/40 blur-[1px] origin-right"></div>
-          <div className="w-3.5 h-3.5 bg-yellow-400 rounded-full shadow-[0_0_15px_#facc15] border border-white/50 flex items-center justify-center">
+          <div className={`w-3.5 h-3.5 ${workerRef.current.status === 'rebooting' ? 'bg-blue-400' : 'bg-yellow-400'} rounded-full shadow-[0_0_15px_rgba(59,130,246,0.8)] border border-white/50 flex items-center justify-center`}>
              <div className="w-1.5 h-1.5 bg-black/60 rounded-full animate-pulse"></div>
           </div>
         </div>
       </div>
+
       <div className="absolute inset-0 pointer-events-none z-[150] overflow-visible">
         {Array.from({ length: MAX_PARTICLES }).map((_, i) => (
           <div key={i} ref={el => { particleRefs.current[i] = el; }} className="absolute blur-[1px] will-change-transform" style={{ display: 'none', width: '8px', height: '8px' }} />
@@ -441,42 +487,15 @@ const App: React.FC = () => {
       </div>
       <div className="absolute inset-0 pointer-events-none z-[200]">
         <div className="absolute" style={{ left: anchorPos.x, top: anchorPos.y }}>
-          <div 
-            className="relative" 
-            onMouseEnter={isPanelVisible ? showHub : undefined} 
-            onMouseLeave={isPanelVisible ? startHideTimer : undefined}
-          >
-            <DraggableAnchor 
-              language={language} 
-              onHover={(val) => {
-                if (!val && isPanelVisible) startHideTimer();
-                else if (val && isPanelVisible) showHub();
-              }} 
-              onClick={toggleHub}
-              onPositionChange={(x, y) => setAnchorPos({x, y})} 
-              initialPos={anchorPos} 
-              setIgnoreMouse={setIgnoreMouse} 
-            />
+          <div className="relative" onMouseEnter={() => { setIgnoreMouse(false); showHub(); }} onMouseLeave={startHideTimer}>
+            <DraggableAnchor language={language} onHover={(val) => { if (!val && isPanelVisible) startHideTimer(); else if (val) showHub(); }} onClick={toggleHub} onPositionChange={(x, y) => setAnchorPos({x, y})} initialPos={anchorPos} setIgnoreMouse={setIgnoreMouse} />
             {isPanelVisible && (
-              <div 
-                className="absolute left-8 -top-24 transition-all duration-300 pointer-events-auto shadow-2xl"
-                onMouseEnter={showHub}
-                onMouseLeave={startHideTimer}
-                style={{ transform: `scale(${config.uiScale})`, transformOrigin: 'top left' }}
-              >
+              <div className="absolute left-8 -top-24 transition-all duration-300 pointer-events-auto shadow-2xl" onMouseEnter={showHub} onMouseLeave={startHideTimer} style={{ transform: `scale(${config.uiScale})`, transformOrigin: 'top left' }}>
                 <ControlPanel 
-                  config={config} 
-                  resources={uiResources} 
-                  hwStats={hwStats} 
-                  language={language} 
-                  logs={logs}
-                  efficiencyLevel={efficiencyLevel}
-                  onLanguageChange={setLanguage} 
-                  onChange={setConfig} 
-                  onPulse={handleManualPulse} 
-                  onUpgrade={handleUpgrade}
-                  isGodMode={isGodModeVisible}
-                  onGodAddScrap={handleGodAddScrap}
+                  config={config} resources={uiResources} hwStats={hwStats} language={language} logs={logs} efficiencyLevel={efficiencyLevel}
+                  onLanguageChange={setLanguage} onChange={setConfig} onPulse={handleManualPulse} onUpgrade={handleUpgrade}
+                  isGodMode={isGodModeVisible} onGodAddScrap={handleGodAddScrap} isDerailed={isDerailed} onReboot={handleRebootRequest}
+                  isDroneBusy={workerRef.current.status !== 'sleeping'}
                 />
               </div>
             )}

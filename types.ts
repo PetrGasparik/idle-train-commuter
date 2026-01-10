@@ -57,7 +57,7 @@ export interface LogEntry {
   type: 'info' | 'success' | 'warning' | 'input';
 }
 
-export type WorkerStatus = 'sleeping' | 'approaching' | 'refueling' | 'riding' | 'returning';
+export type WorkerStatus = 'sleeping' | 'approaching' | 'refueling' | 'riding' | 'returning' | 'rebooting';
 
 export interface WorkerState {
   status: WorkerStatus;
