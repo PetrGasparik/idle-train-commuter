@@ -18,21 +18,21 @@ const DesktopSimulator: React.FC<DesktopSimulatorProps> = ({ logs, language }) =
   }, [logs]);
 
   return (
-    <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none z-[-1]">
+    <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none z-[0]">
       {/* Windows 11 Wallpaper (Bloom) */}
-      <div className="absolute inset-0 bg-cover bg-center transition-all duration-1000" style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=2574&auto=format&fit=crop")' }}>
+      <div className="absolute inset-0 bg-cover bg-center transition-all duration-1000 pointer-events-none" style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=2574&auto=format&fit=crop")' }}>
         <div className="absolute inset-0 bg-blue-900/10 backdrop-blur-[2px]"></div>
       </div>
 
       {/* Desktop Icons - Enabled interaction for simulation */}
-      <div className="absolute top-10 left-10 flex flex-col gap-8 pointer-events-auto">
+      <div className="absolute top-10 left-10 flex flex-col gap-8 pointer-events-none z-10">
         {[
           { name: 'This PC', color: 'bg-blue-500' },
           { name: 'Recycle Bin', color: 'bg-slate-400' },
           { name: 'Train Files', color: 'bg-amber-500' },
           { name: 'VS Code', color: 'bg-sky-600' },
         ].map((icon, i) => (
-          <div key={i} className="flex flex-col items-center gap-1 w-20 group cursor-pointer" onClick={() => alert(`Clicked ${icon.name} (Simulation)`)}>
+          <div key={i} className="flex flex-col items-center gap-1 w-20 group cursor-pointer pointer-events-auto" onClick={() => alert(`Clicked ${icon.name} (Simulation)`)}>
             <div className={`w-12 h-12 rounded-lg ${icon.color} shadow-lg border border-white/20 flex items-center justify-center transition-transform group-hover:scale-105`}>
                <div className="w-6 h-6 bg-white/20 rounded-sm"></div>
             </div>
@@ -42,7 +42,7 @@ const DesktopSimulator: React.FC<DesktopSimulatorProps> = ({ logs, language }) =
       </div>
 
       {/* Fake Application Window */}
-      <div className="absolute top-[15%] left-[30%] w-[45%] h-[50%] bg-slate-900/80 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-700 pointer-events-auto">
+      <div className="absolute top-[15%] left-[30%] w-[45%] h-[50%] bg-slate-900/80 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-700 pointer-events-auto z-20">
         <div className="h-10 bg-black/40 flex items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-blue-400 rounded-sm"></div>
@@ -92,9 +92,9 @@ const DesktopSimulator: React.FC<DesktopSimulatorProps> = ({ logs, language }) =
       </div>
 
       {/* Taskbar */}
-      <div className="absolute bottom-0 left-0 right-0 h-12 bg-black/20 backdrop-blur-3xl border-t border-white/5 flex items-center justify-center px-4 pointer-events-auto">
+      <div className="absolute bottom-0 left-0 right-0 h-12 bg-black/20 backdrop-blur-3xl border-t border-white/5 flex items-center justify-center px-4 pointer-events-none z-30">
         <div className="flex items-center gap-1.5 h-full">
-            <div className="w-10 h-8 bg-blue-500/20 rounded-md flex items-center justify-center hover:bg-blue-500/30 transition-colors cursor-pointer">
+            <div className="w-10 h-8 bg-blue-500/20 rounded-md flex items-center justify-center hover:bg-blue-500/30 transition-colors cursor-pointer pointer-events-auto">
               <div className="grid grid-cols-2 gap-0.5 w-4 h-4">
                 <div className="bg-blue-400 rounded-[1px]"></div>
                 <div className="bg-blue-400 rounded-[1px]"></div>
@@ -103,7 +103,7 @@ const DesktopSimulator: React.FC<DesktopSimulatorProps> = ({ logs, language }) =
               </div>
             </div>
             {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className={`w-10 h-8 rounded-md flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer ${i === 2 ? 'border-b-2 border-blue-400' : ''}`}>
+              <div key={i} className={`w-10 h-8 rounded-md flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer pointer-events-auto ${i === 2 ? 'border-b-2 border-blue-400' : ''}`}>
                 <div className={`w-5 h-5 rounded-md ${i % 2 === 0 ? 'bg-amber-400/50' : 'bg-emerald-400/50'}`}></div>
               </div>
             ))}

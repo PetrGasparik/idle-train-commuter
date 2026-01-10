@@ -76,7 +76,7 @@ const App: React.FC = () => {
     if (!isElectron) return;
     try { 
       const { ipcRenderer } = (window as any).require('electron');
-      ipcRenderer.send('set-ignore-mouse-events', ignore, true);
+      ipcRenderer.send('set-ignore-mouse-events', ignore, { forward: true });
     } catch (e) {}
   }, [isElectron]);
 
@@ -458,7 +458,10 @@ const App: React.FC = () => {
     <div className={`relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none ${glitchActive ? 'glitch-active' : ''}`}>
       {!isElectron && <DesktopSimulator logs={logs} language={language} />}
       
-      <GodModeOverlay isVisible={isGodModeVisible} onToggle={() => setIsGodModeVisible(!isGodModeVisible)} onAddScrap={handleGodAddScrap} setIgnoreMouse={setIgnoreMouse} />
+      {/* God Mode - Pouze v prohlížeči */}
+      {!isElectron && (
+        <GodModeOverlay isVisible={isGodModeVisible} onToggle={() => setIsGodModeVisible(!isGodModeVisible)} onAddScrap={handleGodAddScrap} setIgnoreMouse={setIgnoreMouse} />
+      )}
 
       {/* Robot Drone */}
       <div ref={workerVisualRef} className="absolute z-[110] pointer-events-none transition-opacity duration-300">
@@ -494,7 +497,7 @@ const App: React.FC = () => {
                 <ControlPanel 
                   config={config} resources={uiResources} hwStats={hwStats} language={language} logs={logs} efficiencyLevel={efficiencyLevel}
                   onLanguageChange={setLanguage} onChange={setConfig} onPulse={handleManualPulse} onUpgrade={handleUpgrade}
-                  isGodMode={isGodModeVisible} onGodAddScrap={handleGodAddScrap} isDerailed={isDerailed} onReboot={handleRebootRequest}
+                  isGodMode={isGodModeVisible && !isElectron} onGodAddScrap={handleGodAddScrap} isDerailed={isDerailed} onReboot={handleRebootRequest}
                   isDroneBusy={workerRef.current.status !== 'sleeping'}
                 />
               </div>
