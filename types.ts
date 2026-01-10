@@ -17,6 +17,9 @@ export interface TrainConfig {
   type: 'modern' | 'steam' | 'cargo' | 'ai'; // Base locomotive style
   imageUrl?: string;
   idleCruise: boolean;
+  trackMargin: number;
+  cornerRadius: number;
+  cpuUpgradeLevel: number;
 }
 
 export interface Position {

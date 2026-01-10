@@ -1,6 +1,6 @@
 
-import React, { useState, memo } from 'react';
-import { TrainConfig, Resources, Language, CarType, HardwareStats } from '../types';
+import React, { useState, memo, useRef, useEffect } from 'react';
+import { TrainConfig, Resources, Language, CarType, HardwareStats, LogEntry } from '../types';
 import { generateTrainSkin } from '../services/gemini';
 import { t } from '../locales';
 
@@ -9,22 +9,31 @@ interface ControlPanelProps {
   resources: Resources;
   hwStats: HardwareStats & { isReal?: boolean };
   language: Language;
+  logs: LogEntry[];
+  efficiencyLevel: number;
   onLanguageChange: (lang: Language) => void;
   onChange: (config: TrainConfig) => void;
   onPulse: () => void;
-  onUpgrade: (type: 'wagon' | 'fuel' | 'mining' | 'residential') => void;
+  onUpgrade: (type: 'wagon' | 'fuel' | 'mining' | 'residential' | 'cpu') => void;
   isGodMode?: boolean;
   onGodAddScrap?: () => void;
 }
 
-type Tab = 'vitals' | 'shop' | 'ai';
+type Tab = 'vitals' | 'shop' | 'logs' | 'ai' | 'help';
 
 const ControlPanel: React.FC<ControlPanelProps> = memo(({ 
-  config, resources, hwStats, language, onLanguageChange, onChange, onPulse, onUpgrade, isGodMode, onGodAddScrap
+  config, resources, hwStats, language, logs, efficiencyLevel, onLanguageChange, onChange, onPulse, onUpgrade, isGodMode, onGodAddScrap
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vitals');
   const [aiPrompt, setAiPrompt] = useState('');
   const [loading, setLoading] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (activeTab === 'logs' && logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, activeTab]);
 
   const fuelPercentage = Math.min(100, Math.max(0, resources.energy));
   const isOut = fuelPercentage <= 0;
@@ -66,24 +75,24 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex bg-black/40 rounded-xl p-1 gap-1">
-        {(['vitals', 'shop', 'ai'] as Tab[]).map((tab) => (
+      <div className="flex bg-black/40 rounded-xl p-1 gap-0.5">
+        {(['vitals', 'shop', 'logs', 'ai', 'help'] as Tab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all ${
+            className={`flex-1 py-1.5 rounded-lg text-[7px] font-black uppercase tracking-wider transition-all ${
               activeTab === tab ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-white/40 hover:text-white/60 hover:bg-white/5'
             }`}
           >
-            {tab === 'vitals' ? 'Vitals' : tab === 'shop' ? 'Shop' : 'Neural'}
+            {tab === 'vitals' ? 'Core' : tab === 'shop' ? 'Shop' : tab === 'logs' ? 'Logs' : tab === 'ai' ? 'Neural' : '?'}
           </button>
         ))}
       </div>
 
       {/* Main Content Area */}
-      <div className="min-h-[220px] flex flex-col">
+      <div className="min-h-[260px] max-h-[380px] flex flex-col overflow-hidden">
         {activeTab === 'vitals' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-1 custom-scrollbar">
             {/* Primary Resources */}
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
@@ -118,7 +127,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
               </div>
             </div>
 
-            {/* Hardware Vitals */}
+            {/* Core Speed & Hardware Vitals */}
             <div className="p-3 bg-black/20 rounded-2xl border border-white/5 space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-[7px] font-black text-white/30 uppercase tracking-widest">Hardware Link</span>
@@ -130,41 +139,69 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] font-bold text-white/50">CPU Load</span>
-                   <span className={`text-[9px] font-mono ${hwStats.cpu > 80 ? 'text-red-500 animate-pulse' : 'text-white'}`}>{Math.floor(hwStats.cpu)}%</span>
+                   <span className={`text-[9px] font-mono ${hwStats.cpu > (92 + config.cpuUpgradeLevel * 4) ? 'text-red-500 animate-pulse' : 'text-white'}`}>{Math.floor(hwStats.cpu)}%</span>
                 </div>
                 <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                   <div className={`h-full transition-all duration-500 ${hwStats.cpu > 80 ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${hwStats.cpu}%` }}></div>
                 </div>
-
-                <div className="flex justify-between items-center">
-                   <span className="text-[8px] font-bold text-white/50">Core Temp</span>
-                   <span className={`text-[9px] font-mono ${hwStats.temp > 80 ? 'text-orange-500' : 'text-white'}`}>{Math.floor(hwStats.temp)}°C</span>
-                </div>
-                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                  <div className={`h-full transition-all duration-500 ${hwStats.temp > 80 ? 'bg-orange-500' : 'bg-emerald-500'}`} style={{ width: `${hwStats.temp}%` }}></div>
-                </div>
               </div>
             </div>
 
-            {/* Core Speed */}
-            <div>
-              <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
-                <span>{t(language, 'coreSpeed')}</span>
-                <span className="font-mono text-blue-400 font-bold">{config.speed} km/h</span>
+            {/* Adjustments (Resizable) */}
+            <div className="bg-white/5 p-3 rounded-2xl border border-white/5 space-y-4">
+              <p className="text-[8px] font-black text-white/30 uppercase tracking-widest">Navigation Geometry</p>
+              
+              <div>
+                <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
+                  <span>{t(language, 'coreSpeed')}</span>
+                  <span className="font-mono text-blue-400 font-bold">{config.speed} km/h</span>
+                </div>
+                <input 
+                  type="range" min="1" max="60" step="1" 
+                  value={config.speed} 
+                  onChange={(e) => onChange({...config, speed: Number(e.target.value)})}
+                  className="w-full accent-blue-500 bg-white/10 rounded-lg appearance-none h-1 cursor-pointer"
+                />
               </div>
-              <input 
-                type="range" min="1" max="60" step="1" 
-                value={config.speed} 
-                onChange={(e) => onChange({...config, speed: Number(e.target.value)})}
-                className="w-full accent-blue-500 bg-white/10 rounded-lg appearance-none h-1.5 cursor-pointer"
-              />
+
+              <div>
+                <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
+                  <span>{t(language, 'trackMargin')}</span>
+                  <span className="font-mono text-white font-bold">{config.trackMargin}px</span>
+                </div>
+                <input 
+                  type="range" min="0" max="100" step="1" 
+                  value={config.trackMargin} 
+                  onChange={(e) => onChange({...config, trackMargin: Number(e.target.value)})}
+                  className="w-full accent-white bg-white/10 rounded-lg appearance-none h-1 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
+                  <span>{t(language, 'cornerRadius')}</span>
+                  <span className="font-mono text-white font-bold">{config.cornerRadius}px</span>
+                </div>
+                <input 
+                  type="range" min="0" max="150" step="2" 
+                  value={config.cornerRadius} 
+                  onChange={(e) => onChange({...config, cornerRadius: Number(e.target.value)})}
+                  className="w-full accent-white bg-white/10 rounded-lg appearance-none h-1 cursor-pointer"
+                />
+              </div>
             </div>
           </div>
         )}
 
         {activeTab === 'shop' && (
-          <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-             <p className="text-[8px] uppercase tracking-widest text-white/30 mb-2">{t(language, 'upgrades')}</p>
+          <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-1 custom-scrollbar">
+             <div className="flex justify-between items-center mb-2">
+               <p className="text-[8px] uppercase tracking-widest text-white/30">{t(language, 'upgrades')}</p>
+               <div className="flex gap-2">
+                 <span className="text-[7px] text-blue-400 font-bold uppercase tracking-tighter">EF_LVL: {efficiencyLevel}</span>
+                 <span className="text-[7px] text-red-400 font-bold uppercase tracking-tighter">CPU_LVL: {config.cpuUpgradeLevel}</span>
+               </div>
+             </div>
              
              <button onClick={() => onUpgrade('wagon')} disabled={resources.scrap < 10}
                className="w-full flex justify-between items-center p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 disabled:opacity-30 transition-all group">
@@ -201,6 +238,40 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
                </div>
                <div className="px-2 py-1 bg-blue-500/20 rounded-lg text-[8px] font-mono font-bold text-blue-400 border border-blue-500/30">25 SC</div>
              </button>
+
+             <button onClick={() => onUpgrade('cpu')} disabled={resources.scrap < 30}
+               className="w-full flex justify-between items-center p-2.5 rounded-xl bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 disabled:opacity-30 transition-all group">
+               <div className="flex flex-col items-start text-left">
+                 <span className="text-[9px] font-bold group-hover:text-red-400 transition-colors">{t(language, 'cpuUpgrade')}</span>
+                 <span className="text-[7px] text-white/40">{t(language, 'cpuUpgradeDesc')}</span>
+               </div>
+               <div className="px-2 py-1 bg-red-500/20 rounded-lg text-[8px] font-mono font-bold text-red-400 border border-red-500/30">30 SC</div>
+             </button>
+          </div>
+        )}
+
+        {activeTab === 'logs' && (
+          <div className="flex-1 flex flex-col bg-black/40 rounded-2xl border border-white/5 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="p-2 border-b border-white/5 bg-white/5 flex justify-between items-center">
+              <span className="text-[7px] font-black uppercase tracking-widest text-white/40">Event Stream</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 font-mono space-y-2 custom-scrollbar text-[8px]">
+              {logs.map((log) => (
+                <div key={log.id} className="flex gap-2 border-l border-white/10 pl-2 py-0.5">
+                  <span className="text-white/20 shrink-0">[{log.timestamp}]</span>
+                  <span className={`
+                    ${log.type === 'success' ? 'text-emerald-400' : ''}
+                    ${log.type === 'warning' ? 'text-amber-400' : ''}
+                    ${log.type === 'input' ? 'text-sky-400' : ''}
+                    ${log.type === 'info' ? 'text-white/60' : ''}
+                  `}>
+                    {log.message}
+                  </span>
+                </div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
           </div>
         )}
 
@@ -230,13 +301,39 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
             </div>
           </div>
         )}
+
+        {activeTab === 'help' && (
+          <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <section>
+              <h3 className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">Economy</h3>
+              <p className="text-[8px] text-white/60">Residential wagons generate scrap over time. Mining wagons boost manual pulses.</p>
+            </section>
+            <section>
+              <h3 className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">Efficiency Core</h3>
+              <p className="text-[8px] text-white/60">Reduces fuel consumption per distance by 15% per level.</p>
+            </section>
+            <section>
+              <h3 className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">CPU Heat Sink</h3>
+              <p className="text-[8px] text-white/60">Increases the load threshold before track glitches and sparks occur.</p>
+            </section>
+            <section>
+              <h3 className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">Navigation Geometry</h3>
+              <p className="text-[8px] text-white/60">Use sliders in Core tab to change track offset and corner smoothness.</p>
+            </section>
+          </div>
+        )}
       </div>
 
-      {/* Footer Branding */}
       <div className="pt-2 border-t border-white/5 flex justify-between items-center opacity-30 group-hover:opacity-100 transition-opacity">
         <span className="text-[6px] font-bold tracking-[0.3em]">PERIMETER_DRIVE</span>
         <span className="text-[6px] font-mono">X-{Math.floor(resources.totalDistance)}LY</span>
       </div>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+      `}</style>
     </div>
   );
 });

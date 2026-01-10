@@ -8,8 +8,6 @@ import DesktopSimulator from './components/DesktopSimulator';
 import GodModeOverlay from './components/GodModeOverlay';
 import { t } from './locales';
 
-const TRACK_MARGIN = 14; 
-const CORNER_RADIUS = 30; 
 const SMOKE_LIFETIME = 1200; 
 const MAX_PARTICLES = 30; 
 
@@ -30,7 +28,10 @@ const App: React.FC = () => {
     carSpacing: 50, 
     color: '#3b82f6',
     type: 'modern',
-    idleCruise: true 
+    idleCruise: true,
+    trackMargin: 14,
+    cornerRadius: 30,
+    cpuUpgradeLevel: 0
   });
 
   const [uiResources, setUiResources] = useState<Resources>({
@@ -38,6 +39,8 @@ const App: React.FC = () => {
     scrap: 0,
     totalDistance: 0
   });
+
+  const [efficiencyLevel, setEfficiencyLevel] = useState(0);
 
   const [hwStats, setHwStats] = useState<HardwareStats & { isReal?: boolean }>({
     cpu: 10,
@@ -88,6 +91,7 @@ const App: React.FC = () => {
   }, []);
   
   const resourcesRef = useRef<Resources>({ energy: 40, scrap: 0, totalDistance: 0 });
+  const efficiencyRef = useRef(0);
   const hwStatsRef = useRef<HardwareStats & { isReal?: boolean }>({ cpu: 10, ram: 30, temp: 45, isReal: false });
   const workerRef = useRef<WorkerState>({ 
     status: 'sleeping', 
@@ -115,14 +119,14 @@ const App: React.FC = () => {
   const updateMetrics = useCallback(() => {
     const W = window.innerWidth;
     const H = window.innerHeight;
-    const m = TRACK_MARGIN;
-    const R = CORNER_RADIUS;
+    const m = config.trackMargin;
+    const R = config.cornerRadius;
     const w_strip = Math.max(0, W - 2 * m - 2 * R);
     const h_strip = Math.max(0, H - 2 * m - 2 * R);
     const arc = (Math.PI * R) / 2;
     const perimeter = 2 * w_strip + 2 * h_strip + 4 * arc;
     metricsRef.current = { width: W, height: H, perimeter };
-  }, []);
+  }, [config.trackMargin, config.cornerRadius]);
 
   useEffect(() => {
     updateMetrics();
@@ -133,6 +137,10 @@ const App: React.FC = () => {
   useEffect(() => {
     anchorPosRef.current = anchorPos;
   }, [anchorPos]);
+
+  useEffect(() => {
+    efficiencyRef.current = efficiencyLevel;
+  }, [efficiencyLevel]);
 
   useEffect(() => {
     if (!isElectron) return;
@@ -151,29 +159,40 @@ const App: React.FC = () => {
     const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const message = t(language, messageKey);
     const newLog: LogEntry = { id: Math.random().toString(36).substr(2, 9), timestamp, message, type };
-    setLogs(prev => [...prev.slice(-14), newLog]);
+    setLogs(prev => [...prev.slice(-30), newLog]);
   }, [language]);
 
   const handleManualPulse = useCallback(() => {
     resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 5);
     boostImpulseRef.current += 30; 
+    
+    const miningWagons = config.cars.filter(c => c === 'mining').length;
+    if (miningWagons > 0) {
+      resourcesRef.current.scrap += (1 * miningWagons);
+    }
+
     hwStatsRef.current.cpu = Math.min(100, hwStatsRef.current.cpu + 15);
     setHwStats(prev => ({ ...prev, cpu: hwStatsRef.current.cpu }));
     lastActivityRef.current = performance.now();
     addLog('logManualFuel', 'success');
-  }, [addLog]);
+  }, [addLog, config.cars]);
 
   const handleGodAddScrap = useCallback(() => {
     resourcesRef.current.scrap += 999;
     setUiResources(prev => ({ ...prev, scrap: resourcesRef.current.scrap }));
   }, []);
 
-  const handleUpgrade = useCallback((type: 'wagon' | 'fuel' | 'mining' | 'residential') => {
-    const costs = { wagon: 10, fuel: 25, mining: 15, residential: 20 };
+  const handleUpgrade = useCallback((type: 'wagon' | 'fuel' | 'mining' | 'residential' | 'cpu') => {
+    const costs = { wagon: 10, fuel: 25, mining: 15, residential: 20, cpu: 30 };
     if (resourcesRef.current.scrap >= costs[type]) {
       resourcesRef.current.scrap -= costs[type];
-      if (type === 'fuel') addLog('logEfficiency', 'success');
-      else {
+      if (type === 'fuel') {
+        setEfficiencyLevel(prev => prev + 1);
+        addLog('logEfficiency', 'success');
+      } else if (type === 'cpu') {
+        setConfig(prev => ({ ...prev, cpuUpgradeLevel: prev.cpuUpgradeLevel + 1 }));
+        addLog('logCpuUpgrade', 'success');
+      } else {
         const wagonType: CarType = type === 'mining' ? 'mining' : type === 'residential' ? 'residential' : 'standard';
         setConfig(prev => ({ ...prev, cars: [...prev.cars, wagonType].slice(0, 15) }));
         addLog(type === 'mining' ? 'logMiningWagon' : type === 'residential' ? 'logResidentialWagon' : 'logWagon', 'success');
@@ -191,8 +210,8 @@ const App: React.FC = () => {
 
   const getPositionOnPerimeter = (d: number): Position => {
     const { width: W, height: H, perimeter } = metricsRef.current;
-    const m = TRACK_MARGIN;
-    const R = CORNER_RADIUS;
+    const m = config.trackMargin;
+    const R = config.cornerRadius;
     const w_strip = Math.max(0, W - 2 * m - 2 * R);
     const h_strip = Math.max(0, H - 2 * m - 2 * R);
     const arc = (Math.PI * R) / 2;
@@ -251,7 +270,10 @@ const App: React.FC = () => {
         const resWagons = config.cars.filter(c => c === 'residential').length;
         resourcesRef.current.scrap += (resWagons * 0.00015 * deltaTime); 
       }
-      const consumptionPerPixel = 10 / (perimeter || 5000);
+
+      const efficiencyMultiplier = Math.pow(0.85, efficiencyRef.current);
+      const consumptionPerPixel = (10 / (perimeter || 5000)) * efficiencyMultiplier;
+      
       const energyLoss = (isActuallyMoving ? (moveAmount * consumptionPerPixel) : (deltaTime / 20000)) * (1 + Math.max(0, hwStatsRef.current.temp - 40) / 200);
       resourcesRef.current.energy = Math.max(0, resourcesRef.current.energy - energyLoss);
       
@@ -286,7 +308,12 @@ const App: React.FC = () => {
       
       distanceRef.current += moveAmount;
       resourcesRef.current.totalDistance += moveAmount / 2000;
-      const jitter = hwStatsRef.current.cpu > 80 ? (Math.random() - 0.5) * (hwStatsRef.current.cpu / 15) : 0;
+      
+      // CPU Glitch threshold influenced by upgrade
+      const glitchThreshold = 92 + (config.cpuUpgradeLevel * 4);
+      const isGlitching = hwStatsRef.current.cpu > glitchThreshold;
+      const jitter = isGlitching ? (Math.random() - 0.5) * (hwStatsRef.current.cpu / 15) : 0;
+      
       carRefs.current.forEach((el, i) => {
         if (el) {
           const pos = getPositionOnPerimeter(distanceRef.current - (i * config.carSpacing));
@@ -300,7 +327,7 @@ const App: React.FC = () => {
       }
       if (isActuallyMoving && time - lastSmokeTimeRef.current > (150 / (effectiveSpeed/4))) {
         const lp = getPositionOnPerimeter(distanceRef.current);
-        const isStorm = hwStatsRef.current.cpu > 90;
+        const isStorm = isGlitching;
         let sColor = isStorm ? 'rgba(56, 189, 248, 0.9)' : (hwStatsRef.current.temp > 80 ? 'rgba(239,68,68,0.7)' : 'rgba(255,255,255,0.7)');
         const newPuff: SmokeParticle = {
           id: nextParticleId.current++,
@@ -336,7 +363,7 @@ const App: React.FC = () => {
     }
     lastTimeRef.current = time;
     requestRef.current = requestAnimationFrame(animate);
-  }, [config.speed, config.carSpacing, config.cars]);
+  }, [config.speed, config.carSpacing, config.cars, config.trackMargin, config.cornerRadius, config.cpuUpgradeLevel]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
@@ -362,21 +389,23 @@ const App: React.FC = () => {
       };
       setHwStats({ ...hwStatsRef.current });
 
-      if (newCpu > 90) addLog('logCpuStorm', 'warning');
+      const glitchThreshold = 92 + (config.cpuUpgradeLevel * 4);
+      if (newCpu > glitchThreshold) addLog('logCpuStorm', 'warning');
     }, 1000); 
     return () => clearInterval(hwSim);
-  }, [config.cars.length, config.speed, addLog]);
+  }, [config.cars.length, config.speed, config.cpuUpgradeLevel, addLog]);
 
   useEffect(() => {
     const syncInterval = setInterval(() => { setUiResources({ ...resourcesRef.current }); }, 250); 
     return () => { clearInterval(syncInterval); };
   }, []);
 
+  const glitchActive = hwStats.cpu > (92 + config.cpuUpgradeLevel * 4);
+
   return (
-    <div className={`relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none ${hwStats.cpu > 92 ? 'glitch-active' : ''}`}>
+    <div className={`relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none ${glitchActive ? 'glitch-active' : ''}`}>
       {!isElectron && <DesktopSimulator logs={logs} language={language} />}
       
-      {/* GOD MODE OVERLAY */}
       <GodModeOverlay 
         isVisible={isGodModeVisible} 
         onToggle={() => setIsGodModeVisible(!isGodModeVisible)}
@@ -433,6 +462,8 @@ const App: React.FC = () => {
                   resources={uiResources} 
                   hwStats={hwStats} 
                   language={language} 
+                  logs={logs}
+                  efficiencyLevel={efficiencyLevel}
                   onLanguageChange={setLanguage} 
                   onChange={setConfig} 
                   onPulse={handleManualPulse} 

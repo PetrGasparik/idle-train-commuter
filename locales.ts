@@ -41,6 +41,11 @@ export const translations = {
     logCpuStorm: 'WEATHER: CPU Storm detected! Track integrity compromised.',
     logHighTemp: 'WARNING: Core temperature critical. Efficiency dropping.',
     hardwareStats: 'System Vitals',
+    trackMargin: 'Track Margin',
+    cornerRadius: 'Corner Radius',
+    cpuUpgrade: 'CPU Heat Sink',
+    cpuUpgradeDesc: 'Increases glitch threshold',
+    logCpuUpgrade: 'UPGRADE: CPU heat sink installed. Resilience increased.',
   },
   cs: {
     statusHalted: 'SYSTÉM ZASTAVEN',
@@ -81,6 +86,11 @@ export const translations = {
     logCpuStorm: 'POČASÍ: CPU bouře! Integrita perimetru ohrožena.',
     logHighTemp: 'VAROVÁNÍ: Kritická teplota jádra. Efektivita klesá.',
     hardwareStats: 'Systémové funkce',
+    trackMargin: 'Okraj trasy',
+    cornerRadius: 'Poloměr zatáček',
+    cpuUpgrade: 'Chladič procesoru',
+    cpuUpgradeDesc: 'Zvyšuje limit pro záseky',
+    logCpuUpgrade: 'VYLEPŠENÍ: Chladič CPU nainstalován. Odolnost zvýšena.',
   }
 };
 
