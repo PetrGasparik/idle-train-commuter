@@ -31,7 +31,9 @@ const App: React.FC = () => {
     idleCruise: true,
     trackMargin: 14,
     cornerRadius: 30,
-    cpuUpgradeLevel: 0
+    cpuUpgradeLevel: 0,
+    uiScale: 1.0,
+    panelWidth: 288 // Default w-72 equivalent
   });
 
   const [uiResources, setUiResources] = useState<Resources>({
@@ -378,7 +380,10 @@ const App: React.FC = () => {
       const targetCpu = Math.min(100, 5 + wagonLoad + speedLoad);
       const jitter = (Math.random() - 0.5) * 4;
       const newCpu = Math.max(2, Math.min(100, stats.cpu + (targetCpu - stats.cpu) * 0.2 + jitter));
-      const targetTemp = 35 + (newCpu * 0.55);
+      
+      // CPU Upgrade také pomáhá odvádět teplo
+      const tempEfficiency = 1.0 - (config.cpuUpgradeLevel * 0.05);
+      const targetTemp = 35 + (newCpu * 0.55 * tempEfficiency);
       const newTemp = stats.temp + (targetTemp - stats.temp) * 0.15;
 
       hwStatsRef.current = { 
@@ -400,7 +405,8 @@ const App: React.FC = () => {
     return () => { clearInterval(syncInterval); };
   }, []);
 
-  const glitchActive = hwStats.cpu > (92 + config.cpuUpgradeLevel * 4);
+  const glitchThreshold = 92 + config.cpuUpgradeLevel * 4;
+  const glitchActive = hwStats.cpu > glitchThreshold;
 
   return (
     <div className={`relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none ${glitchActive ? 'glitch-active' : ''}`}>
@@ -456,6 +462,7 @@ const App: React.FC = () => {
                 className="absolute left-8 -top-24 transition-all duration-300 pointer-events-auto shadow-2xl"
                 onMouseEnter={showHub}
                 onMouseLeave={startHideTimer}
+                style={{ transform: `scale(${config.uiScale})`, transformOrigin: 'top left' }}
               >
                 <ControlPanel 
                   config={config} 

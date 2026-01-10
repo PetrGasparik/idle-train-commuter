@@ -28,12 +28,59 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
   const [aiPrompt, setAiPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
+  
+  // Resize logic
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartPos = useRef({ x: 0, y: 0, width: 288, scale: 1 });
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (activeTab === 'logs' && logEndRef.current) {
       logEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs, activeTab]);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    resizeStartPos.current = { 
+      x: e.clientX, 
+      y: e.clientY,
+      width: config.panelWidth,
+      scale: config.uiScale 
+    };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const deltaX = e.clientX - resizeStartPos.current.x;
+      const deltaY = e.clientY - resizeStartPos.current.y;
+      
+      // X drag changes WIDTH (pixels)
+      const newWidth = Math.max(250, Math.min(650, resizeStartPos.current.width + deltaX));
+      
+      // Y drag changes SCALE (multiplier)
+      const newScale = Math.max(0.7, Math.min(2.0, resizeStartPos.current.scale + (deltaY / 300)));
+      
+      onChange({ ...config, panelWidth: newWidth, uiScale: newScale });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, config, onChange]);
 
   const fuelPercentage = Math.min(100, Math.max(0, resources.energy));
   const isOut = fuelPercentage <= 0;
@@ -50,8 +97,25 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
                       resources.energy < 15 ? t(language, 'statusCritical') :
                       config.speed > 30 ? t(language, 'statusHighSpeed') : t(language, 'statusStable');
 
+  const glitchThreshold = 92 + config.cpuUpgradeLevel * 4;
+
   return (
-    <div className="w-72 bg-slate-950/95 backdrop-blur-3xl rounded-3xl p-5 text-white shadow-2xl border border-white/10 ring-1 ring-white/5 overflow-hidden flex flex-col gap-4">
+    <div 
+      ref={panelRef}
+      style={{ width: `${config.panelWidth}px` }}
+      className="bg-slate-950/95 backdrop-blur-3xl rounded-3xl p-5 text-white shadow-2xl border border-white/10 ring-1 ring-white/5 overflow-hidden flex flex-col gap-4 relative transition-[width] duration-75"
+    >
+      {/* Interactive Resize Handle */}
+      <div 
+        onMouseDown={handleResizeStart}
+        className={`absolute bottom-0 right-0 w-10 h-10 cursor-nwse-resize flex items-end justify-end p-2 group z-[100] ${isResizing ? 'opacity-100' : 'opacity-30 hover:opacity-100'}`}
+      >
+        <div className="flex flex-col gap-1 items-end pointer-events-none">
+          <div className="w-5 h-px bg-white/60 rotate-[-45deg] origin-right"></div>
+          <div className="w-3 h-px bg-white/60 rotate-[-45deg] origin-right translate-x-[-2px]"></div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
@@ -76,23 +140,32 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
 
       {/* Tabs Navigation */}
       <div className="flex bg-black/40 rounded-xl p-1 gap-0.5">
-        {(['vitals', 'shop', 'logs', 'ai', 'help'] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-1.5 rounded-lg text-[7px] font-black uppercase tracking-wider transition-all ${
-              activeTab === tab ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-white/40 hover:text-white/60 hover:bg-white/5'
-            }`}
-          >
-            {tab === 'vitals' ? 'Core' : tab === 'shop' ? 'Shop' : tab === 'logs' ? 'Logs' : tab === 'ai' ? 'Neural' : '?'}
-          </button>
-        ))}
+        {(['vitals', 'shop', 'logs', 'ai', 'help'] as Tab[]).map((tab) => {
+          let label = '?';
+          if (tab === 'vitals') label = t(language, 'tabCore');
+          else if (tab === 'shop') label = t(language, 'tabShop');
+          else if (tab === 'logs') label = t(language, 'tabLogs');
+          else if (tab === 'ai') label = t(language, 'tabNeural');
+          else if (tab === 'help') label = t(language, 'tabHelp');
+
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-1.5 rounded-lg text-[7px] font-black uppercase tracking-wider transition-all truncate px-1 ${
+                activeTab === tab ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Main Content Area */}
-      <div className="min-h-[260px] max-h-[380px] flex flex-col overflow-hidden">
+      <div className="min-h-[260px] max-h-[420px] flex flex-col overflow-hidden">
         {activeTab === 'vitals' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-1 custom-scrollbar">
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-1 custom-scrollbar pb-2">
             {/* Primary Resources */}
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
@@ -105,13 +178,13 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
                    <div className={`h-full transition-all duration-500 ${ui.bg}`} style={{ width: `${fuelPercentage}%` }}></div>
                 </div>
               </div>
-              <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5 relative overflow-hidden">
                 <div className="flex justify-between items-start mb-1">
                   <p className="text-[7px] uppercase tracking-widest text-emerald-400">{t(language, 'scrapMetal')}</p>
                   {isGodMode && onGodAddScrap && (
                     <button 
                       onClick={onGodAddScrap}
-                      className="text-[6px] bg-red-500/20 hover:bg-red-500/40 text-red-400 px-1 rounded border border-red-500/30 transition-colors font-bold"
+                      className="text-[6px] bg-red-500/20 hover:bg-red-500/40 text-red-400 px-1 rounded border border-red-500/30 transition-colors font-bold z-10"
                     >
                       +999
                     </button>
@@ -127,10 +200,10 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
               </div>
             </div>
 
-            {/* Core Speed & Hardware Vitals */}
+            {/* Hardware Vitals */}
             <div className="p-3 bg-black/20 rounded-2xl border border-white/5 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-[7px] font-black text-white/30 uppercase tracking-widest">Hardware Link</span>
+                <span className="text-[7px] font-black text-white/30 uppercase tracking-widest">{t(language, 'hardwareStats')}</span>
                 <span className={`text-[6px] px-1.5 py-0.5 rounded-full font-bold ${hwStats.isReal ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>
                   {hwStats.isReal ? 'OS REALTIME' : 'SIMULATION'}
                 </span>
@@ -139,22 +212,22 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] font-bold text-white/50">CPU Load</span>
-                   <span className={`text-[9px] font-mono ${hwStats.cpu > (92 + config.cpuUpgradeLevel * 4) ? 'text-red-500 animate-pulse' : 'text-white'}`}>{Math.floor(hwStats.cpu)}%</span>
+                   <span className={`text-[9px] font-mono ${hwStats.cpu > glitchThreshold ? 'text-red-500 animate-pulse' : 'text-white'}`}>{Math.floor(hwStats.cpu)}%</span>
                 </div>
                 <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                  <div className={`h-full transition-all duration-500 ${hwStats.cpu > 80 ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${hwStats.cpu}%` }}></div>
+                  <div className={`h-full transition-all duration-500 ${hwStats.cpu > glitchThreshold ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${hwStats.cpu}%` }}></div>
                 </div>
               </div>
             </div>
 
-            {/* Adjustments (Resizable) */}
+            {/* Adjustments (Navigation Geometry) */}
             <div className="bg-white/5 p-3 rounded-2xl border border-white/5 space-y-4">
-              <p className="text-[8px] font-black text-white/30 uppercase tracking-widest">Navigation Geometry</p>
+              <p className="text-[8px] font-black text-white/30 uppercase tracking-widest">{t(language, 'navGeometry')}</p>
               
               <div>
                 <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
                   <span>{t(language, 'coreSpeed')}</span>
-                  <span className="font-mono text-blue-400 font-bold">{config.speed} km/h</span>
+                  <span className="font-mono text-blue-400 font-bold uppercase">{config.speed} {t(language, 'unitKmH')}</span>
                 </div>
                 <input 
                   type="range" min="1" max="60" step="1" 
@@ -167,7 +240,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
               <div>
                 <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
                   <span>{t(language, 'trackMargin')}</span>
-                  <span className="font-mono text-white font-bold">{config.trackMargin}px</span>
+                  <span className="font-mono text-white font-bold uppercase">{config.trackMargin}{t(language, 'unitPx')}</span>
                 </div>
                 <input 
                   type="range" min="0" max="100" step="1" 
@@ -180,7 +253,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
               <div>
                 <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
                   <span>{t(language, 'cornerRadius')}</span>
-                  <span className="font-mono text-white font-bold">{config.cornerRadius}px</span>
+                  <span className="font-mono text-white font-bold uppercase">{config.cornerRadius}{t(language, 'unitPx')}</span>
                 </div>
                 <input 
                   type="range" min="0" max="150" step="2" 
@@ -188,6 +261,33 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
                   onChange={(e) => onChange({...config, cornerRadius: Number(e.target.value)})}
                   className="w-full accent-white bg-white/10 rounded-lg appearance-none h-1 cursor-pointer"
                 />
+              </div>
+
+              <div className="pt-2 border-t border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
+                    <span>{t(language, 'uiScale')}</span>
+                    <span className="font-mono text-amber-400 font-bold">{config.uiScale.toFixed(2)}X</span>
+                  </div>
+                  <input 
+                    type="range" min="0.7" max="2.0" step="0.05" 
+                    value={config.uiScale} 
+                    onChange={(e) => onChange({...config, uiScale: Number(e.target.value)})}
+                    className="w-full accent-amber-500 bg-white/10 rounded-lg appearance-none h-1 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
+                    <span>{t(language, 'panelWidth')}</span>
+                    <span className="font-mono text-white font-bold">{config.panelWidth}{t(language, 'unitPx')}</span>
+                  </div>
+                  <input 
+                    type="range" min="250" max="650" step="1" 
+                    value={config.panelWidth} 
+                    onChange={(e) => onChange({...config, panelWidth: Number(e.target.value)})}
+                    className="w-full accent-white bg-white/10 rounded-lg appearance-none h-1 cursor-pointer"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -198,8 +298,8 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
              <div className="flex justify-between items-center mb-2">
                <p className="text-[8px] uppercase tracking-widest text-white/30">{t(language, 'upgrades')}</p>
                <div className="flex gap-2">
-                 <span className="text-[7px] text-blue-400 font-bold uppercase tracking-tighter">EF_LVL: {efficiencyLevel}</span>
-                 <span className="text-[7px] text-red-400 font-bold uppercase tracking-tighter">CPU_LVL: {config.cpuUpgradeLevel}</span>
+                 <span className="text-[7px] text-blue-400 font-bold uppercase tracking-tighter">{t(language, 'lvlEfficiency')}: {efficiencyLevel}</span>
+                 <span className="text-[7px] text-red-400 font-bold uppercase tracking-tighter">{t(language, 'lvlCpu')}: {config.cpuUpgradeLevel}</span>
                </div>
              </div>
              
@@ -253,10 +353,15 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
         {activeTab === 'logs' && (
           <div className="flex-1 flex flex-col bg-black/40 rounded-2xl border border-white/5 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="p-2 border-b border-white/5 bg-white/5 flex justify-between items-center">
-              <span className="text-[7px] font-black uppercase tracking-widest text-white/40">Event Stream</span>
+              <span className="text-[7px] font-black uppercase tracking-widest text-white/40">{t(language, 'eventStream')}</span>
               <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
             </div>
             <div className="flex-1 overflow-y-auto p-3 font-mono space-y-2 custom-scrollbar text-[8px]">
+              {logs.length === 0 && (
+                <div className="h-full flex items-center justify-center text-white/10 italic text-[7px] uppercase tracking-widest">
+                  {t(language, 'noActiveData')}
+                </div>
+              )}
               {logs.map((log) => (
                 <div key={log.id} className="flex gap-2 border-l border-white/10 pl-2 py-0.5">
                   <span className="text-white/20 shrink-0">[{log.timestamp}]</span>
@@ -266,6 +371,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
                     ${log.type === 'input' ? 'text-sky-400' : ''}
                     ${log.type === 'info' ? 'text-white/60' : ''}
                   `}>
+                    <span className="mr-2 opacity-50">{log.type === 'input' ? '>' : '#'}</span>
                     {log.message}
                   </span>
                 </div>
@@ -277,14 +383,14 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
 
         {activeTab === 'ai' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <p className="text-[8px] uppercase tracking-widest text-white/30 mb-2">Neural Fabricator</p>
+            <p className="text-[8px] uppercase tracking-widest text-white/30 mb-2">{t(language, 'neuralFabricator')}</p>
             <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-3">
               <input 
                 type="text" 
                 placeholder={t(language, 'neuralPrompt')}
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[9px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[9px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-white placeholder:text-white/20"
               />
               <button 
                 onClick={async () => {
@@ -303,22 +409,22 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
         )}
 
         {activeTab === 'help' && (
-          <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 pb-2">
             <section>
-              <h3 className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">Economy</h3>
-              <p className="text-[8px] text-white/60">Residential wagons generate scrap over time. Mining wagons boost manual pulses.</p>
+              <h3 className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">{t(language, 'helpEconomyTitle')}</h3>
+              <p className="text-[8px] text-white/60 leading-relaxed">{t(language, 'helpEconomyDesc')}</p>
             </section>
             <section>
-              <h3 className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">Efficiency Core</h3>
-              <p className="text-[8px] text-white/60">Reduces fuel consumption per distance by 15% per level.</p>
+              <h3 className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">{t(language, 'helpEfficiencyTitle')}</h3>
+              <p className="text-[8px] text-white/60 leading-relaxed">{t(language, 'helpEfficiencyDesc')}</p>
             </section>
             <section>
-              <h3 className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">CPU Heat Sink</h3>
-              <p className="text-[8px] text-white/60">Increases the load threshold before track glitches and sparks occur.</p>
+              <h3 className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">{t(language, 'helpCpuTitle')}</h3>
+              <p className="text-[8px] text-white/60 leading-relaxed">{t(language, 'helpCpuDesc')}</p>
             </section>
             <section>
-              <h3 className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">Navigation Geometry</h3>
-              <p className="text-[8px] text-white/60">Use sliders in Core tab to change track offset and corner smoothness.</p>
+              <h3 className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">{t(language, 'helpNavTitle')}</h3>
+              <p className="text-[8px] text-white/60 leading-relaxed">{t(language, 'helpNavDesc')}</p>
             </section>
           </div>
         )}

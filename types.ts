@@ -20,6 +20,8 @@ export interface TrainConfig {
   trackMargin: number;
   cornerRadius: number;
   cpuUpgradeLevel: number;
+  uiScale: number;
+  panelWidth: number;
 }
 
 export interface Position {
