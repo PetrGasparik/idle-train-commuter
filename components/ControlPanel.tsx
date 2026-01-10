@@ -24,7 +24,7 @@ interface ControlPanelProps {
 
 type Tab = 'vitals' | 'shop' | 'logs' | 'ai' | 'help';
 
-const MAX_WAGONS = 30;
+const MAX_WAGONS = 30; // Shodné s App.tsx - počet připojených vagonů
 
 const ControlPanel: React.FC<ControlPanelProps> = memo(({ 
   config, resources, hwStats, language, logs, efficiencyLevel, onLanguageChange, onChange, onPulse, onUpgrade, isGodMode, onGodAddScrap, isDerailed, onReboot, isDroneBusy
@@ -101,7 +101,8 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
     return 'bg-red-500 animate-pulse';
   };
 
-  const isWagonLimitReached = config.cars.length >= MAX_WAGONS;
+  const currentWagons = config.cars.length - 1;
+  const isWagonLimitReached = currentWagons >= MAX_WAGONS;
 
   return (
     <div ref={panelRef} style={{ width: `${config.panelWidth}px` }} className={`bg-slate-950/95 backdrop-blur-3xl rounded-3xl p-5 text-white shadow-2xl border ${isDerailed ? 'border-red-500/50 ring-2 ring-red-500/20' : 'border-white/10 ring-1 ring-white/5'} overflow-hidden flex flex-col gap-4 relative transition-all duration-75`}>
@@ -237,7 +238,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
              <div className="flex justify-between items-center mb-2">
                <p className="text-[8px] uppercase tracking-widest text-white/30">{t(language, 'upgrades')}</p>
                <div className="flex gap-2">
-                 <span className="text-[7px] text-blue-400 font-bold uppercase tracking-tighter">{t(language, 'wagonCapacity')}: {config.cars.length}/{MAX_WAGONS}</span>
+                 <span className="text-[7px] text-blue-400 font-bold uppercase tracking-tighter">{t(language, 'wagonCapacity')}: {currentWagons}/{MAX_WAGONS}</span>
                  <span className="text-[7px] text-blue-400 font-bold uppercase tracking-tighter">{t(language, 'lvlEfficiency')}: {efficiencyLevel}</span>
                </div>
              </div>

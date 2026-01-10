@@ -12,7 +12,7 @@ const SMOKE_LIFETIME = 1200;
 const MAX_PARTICLES = 30; 
 const GLITCH_THRESHOLD = 92; 
 const MAX_STORM_DURATION = 5; 
-const MAX_WAGONS = 30;
+const MAX_WAGONS = 30; // Maximální počet PŘIPOJENÝCH vagonů (bez lokomotivy)
 
 const App: React.FC = () => {
   const isElectron = typeof window !== 'undefined' && 
@@ -27,7 +27,7 @@ const App: React.FC = () => {
 
   const [config, setConfig] = useState<TrainConfig>({
     speed: 6,
-    cars: ['standard', 'residential'],
+    cars: ['standard', 'residential'], // Index 0 je lokomotiva, Index 1+ jsou vagony
     carSpacing: 50, 
     color: '#3b82f6',
     type: 'modern',
@@ -218,8 +218,10 @@ const App: React.FC = () => {
   const handleUpgrade = useCallback((type: 'wagon' | 'fuel' | 'mining' | 'residential' | 'cpu') => {
     const costs = { wagon: 10, fuel: 25, mining: 15, residential: 20, cpu: 30 };
     if (resourcesRef.current.scrap >= costs[type]) {
+      // Limit se vztahuje pouze na vagony (cars.length - 1)
       if (type === 'wagon' || type === 'mining' || type === 'residential') {
-        if (config.cars.length >= MAX_WAGONS) {
+        const currentWagons = config.cars.length - 1;
+        if (currentWagons >= MAX_WAGONS) {
           addLog('logMaxWagons', 'warning');
           return;
         }
@@ -233,11 +235,11 @@ const App: React.FC = () => {
         addLog('logCpuUpgrade', 'success');
       } else {
         const wagonType: CarType = type === 'mining' ? 'mining' : type === 'residential' ? 'residential' : 'standard';
-        setConfig(prev => ({ ...prev, cars: [...prev.cars, wagonType].slice(0, MAX_WAGONS) }));
+        setConfig(prev => ({ ...prev, cars: [...prev.cars, wagonType] }));
         addLog(type === 'mining' ? 'logMiningWagon' : type === 'residential' ? 'logResidentialWagon' : 'logWagon', 'success');
       }
     }
-  }, [addLog, config.cars.length]);
+  }, [addLog, config.cars]);
 
   const getPositionOnPerimeter = (d: number): Position => {
     const { width: W, height: H, perimeter } = metricsRef.current;
