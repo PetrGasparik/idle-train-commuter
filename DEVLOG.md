@@ -7,8 +7,6 @@ Transforming the empty screen edge into a living, reactive ecosystem. The train 
 ---
 
 ## 🎨 Visual Soul (Style Guide) - CRITICAL FOR CONSISTENCY
-*Tato sekce definuje vizuální identitu projektu. Při jakékoliv změně kódu ji musíte dodržet:*
-
 - **Atmosphere**: Dark Industrial Sci-Fi / High-Tech Minimal / Lo-Fi Overlay.
 - **Color Palette**:
     - **Primary Base**: `slate-950` (95% opacity) s `backdrop-blur-3xl`.
@@ -23,14 +21,10 @@ Transforming the empty screen edge into a living, reactive ecosystem. The train 
 ---
 
 ## 🏗 Technical Architecture (Standard Practices)
-*Klíčové principy pro stabilitu a výkon:*
-
 - **Performance**: Všechny komponenty (`TrainCar`, `ControlPanel`, `Station`) MUSÍ být v `React.memo()`.
 - **Electron Integration**: 
     - Používáme `setIgnoreMouseEvents(ignore, { forward: true })`.
-    - Detekce myši je throttlovaná na 50ms interval v `App.tsx`.
     - Celý overlay je transparentní a `pointer-events-none`.
-- **UX Bridge**: Implementována 300ms prodleva (Grace Period) pro skrytí menu při přechodu ze stanice na panel.
 - **Resource Logic**: Běží v `useEffect` intervalu (150ms), zatímco animace vlaku běží přes `requestAnimationFrame` (60fps).
 
 ---
@@ -50,10 +44,11 @@ Transforming the empty screen edge into a living, reactive ecosystem. The train 
 - [x] Mining & Residential Wagons.
 - [x] Stability & Performance Patch (Memoization).
 
-### ✅ ARC IV: Hardware Weather (Completed)
-- [x] **CPU Storms**: High CPU load causes visual track distortion/glitches.
+### ✅ ARC IV: Hardware Weather (PERFECTED)
+- [x] **CPU Storms**: High CPU load causes visual track distortion, horizontal glitches, and digital sparks.
 - [x] **RAM Fog**: High memory usage creates fog on edges, reducing visibility.
 - [x] **Thermal Smoke**: Engine smoke color (Blue -> Orange -> Red) based on CPU temperature.
+- [x] **Drone Cycle Fix**: Bot now correctly cycles between station and train without getting stuck.
 
 ### 🌑 ARC V: Neural Core (Next)
 - [ ] **AI Navigator**: Train reacts to specific active window titles (e.g., speed up in VS Code).

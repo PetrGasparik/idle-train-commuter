@@ -1,6 +1,8 @@
+
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import si from 'systeminformation';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +43,31 @@ function createWindow() {
 
   win.setMenu(null);
   win.setAlwaysOnTop(true, 'screen-saver');
+
+  // Hardware Polling
+  const pollHw = setInterval(async () => {
+    if (win.isDestroyed()) {
+      clearInterval(pollHw);
+      return;
+    }
+    try {
+      const [load, mem, temp] = await Promise.all([
+        si.currentLoad(),
+        si.mem(),
+        si.cpuTemperature()
+      ]);
+
+      const stats = {
+        cpu: load.currentLoad,
+        ram: (mem.active / mem.total) * 100,
+        temp: temp.main || 45, // Fallback if temp sensor not found
+        isReal: true
+      };
+      win.webContents.send('hw-stats-update', stats);
+    } catch (e) {
+      // Quietly fail if si has issues
+    }
+  }, 2000);
 
   // Detection of Global Context (Focus/Blur)
   win.on('focus', () => {
