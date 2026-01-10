@@ -85,25 +85,20 @@ const App: React.FC = () => {
     anchorPosRef.current = anchorPos;
   }, [anchorPos]);
 
-  // ELECTRON IPC LISTENER
   useEffect(() => {
     if (!isElectron) return;
-
     try {
       const { ipcRenderer } = (window as any).require('electron');
       ipcRenderer.on('hw-stats-update', (event: any, stats: any) => {
-        const jitter = (Math.random() - 0.5) * 2;
         hwStatsRef.current = {
-          cpu: Math.max(0, Math.min(100, stats.cpu + jitter)),
-          ram: Math.max(0, Math.min(100, stats.ram)),
+          cpu: stats.cpu,
+          ram: stats.ram,
           temp: stats.temp,
           isReal: true
         };
         setHwStats({ ...hwStatsRef.current });
       });
-    } catch (e) {
-      console.warn("IPC failed, using fallback simulation");
-    }
+    } catch (e) {}
   }, [isElectron]);
 
   const addLog = useCallback((messageKey: any, type: LogEntry['type'] = 'info') => {
@@ -162,49 +157,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const hwInterval = setInterval(() => {
       if (hwStatsRef.current.isReal) return; 
-
       const stats = hwStatsRef.current;
       const targetCpu = 10 + (config.cars.length * 5) + (config.speed * 0.5);
       const newCpu = Math.max(5, Math.min(100, stats.cpu + (targetCpu - stats.cpu) * 0.2 + (Math.random() - 0.5) * 15));
-      const newRam = Math.max(20, Math.min(98, stats.ram + (Math.random() - 0.45) * 2));
       const targetTemp = 35 + (newCpu * 0.4) + (config.speed * 0.8);
       const newTemp = Math.max(30, Math.min(100, stats.temp + (targetTemp - stats.temp) * 0.15));
-      
-      hwStatsRef.current = { cpu: newCpu, ram: newRam, temp: newTemp, isReal: false };
+      hwStatsRef.current = { cpu: newCpu, ram: 30, temp: newTemp, isReal: false };
       setHwStats({ ...hwStatsRef.current });
-
-      if (newCpu > 90) addLog('logCpuStorm', 'warning');
-      if (newTemp > 88) addLog('logHighTemp', 'warning');
     }, 2000);
-
     return () => clearInterval(hwInterval);
-  }, [addLog, config.cars.length, config.speed]);
-
-  useEffect(() => {
-    addLog('logInit', 'success');
-    const handleKeyDown = () => {
-      resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 0.3);
-      lastActivityRef.current = performance.now();
-    };
-    const handleMouseDown = () => {
-      const miningWagons = config.cars.filter(c => c === 'mining').length;
-      resourcesRef.current.scrap += (0.5 * (1 + (miningWagons * 0.5)));
-      lastActivityRef.current = performance.now();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('mousedown', handleMouseDown);
-    const syncInterval = setInterval(() => {
-      setUiResources({ ...resourcesRef.current });
-      setRenderPuffs([...smokePuffsRef.current]);
-    }, 100);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('mousedown', handleMouseDown);
-      clearInterval(syncInterval);
-    };
-  }, [addLog, config.cars]);
+  }, [config.cars.length, config.speed]);
 
   const getPositionOnPerimeter = (d: number, W: number, H: number): Position => {
     const m = TRACK_MARGIN;
@@ -270,25 +232,19 @@ const App: React.FC = () => {
         resourcesRef.current.scrap += (residentialWagons * 0.00015 * deltaTime); 
       }
 
-      // DISTANCE-BASED ENERGY CONSUMPTION
-      // 1 full lap (perimeter) = 10 energy units (10%)
+      // 1 lap = 10% energy
       const consumptionPerPixel = 10 / perimeter;
       const travelConsumption = moveAmount * consumptionPerPixel;
-      
-      // Minimal idle background consumption (to avoid infinite energy)
       const idleConsumption = (deltaTime / 20000);
-      
-      // Thermal penalty: Efficiency drops when core is hot (more resistance)
       const thermalFactor = (1 + Math.max(0, hwStatsRef.current.temp - 40) / 200);
-      
       const energyLoss = (isActuallyMoving ? travelConsumption : idleConsumption) * thermalFactor;
+      
       resourcesRef.current.energy = Math.max(0, resourcesRef.current.energy - energyLoss);
 
       const w = workerRef.current;
       const trainPos = getPositionOnPerimeter(distanceRef.current, W, H);
       const basePos = anchorPosRef.current;
 
-      // WORKER LOGIC
       if (w.status === 'sleeping') {
         w.x = basePos.x; w.y = basePos.y;
         if (resourcesRef.current.energy < 15 && Date.now() - w.lastAction > 5000) { 
@@ -334,22 +290,13 @@ const App: React.FC = () => {
       if (workerVisualRef.current) {
         workerVisualRef.current.style.transform = `translate(${w.x}px, ${w.y}px) translate(-50%, -50%) rotate(${w.rotation}deg)`;
         workerVisualRef.current.style.opacity = w.status === 'sleeping' ? '0.4' : '1';
-        if (w.status === 'sleeping') {
-           workerVisualRef.current.style.filter = `drop-shadow(0 0 8px rgba(59, 130, 246, 0.5))`;
-        } else {
-           workerVisualRef.current.style.filter = `drop-shadow(0 0 12px #facc15)`;
-        }
+        workerVisualRef.current.style.filter = w.status === 'sleeping' ? 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.5))' : 'drop-shadow(0 0 12px #facc15)';
       }
 
       if (isActuallyMoving && time - lastSmokeTimeRef.current > (120 / (effectiveSpeed/4))) {
         const lp = getPositionOnPerimeter(distanceRef.current, W, H);
         const isStorm = hwStatsRef.current.cpu > 90;
-        
-        let sColor = isStorm ? 'rgba(56, 189, 248, 0.9)' : 'rgba(255,255,255,0.7)';
-        if (!isStorm) {
-           if (hwStatsRef.current.temp > 80) sColor = 'rgba(239,68,68,0.7)';
-           else if (hwStatsRef.current.temp > 65) sColor = 'rgba(245,158,11,0.7)';
-        }
+        let sColor = isStorm ? 'rgba(56, 189, 248, 0.9)' : (hwStatsRef.current.temp > 80 ? 'rgba(239,68,68,0.7)' : 'rgba(255,255,255,0.7)');
 
         const newPuff: SmokeParticle = {
           id: nextParticleId.current++,
@@ -374,21 +321,16 @@ const App: React.FC = () => {
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [animate]);
 
-  const cpuGlitchActive = hwStats.cpu > 92;
+  useEffect(() => {
+    window.addEventListener('keydown', () => { resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 0.3); lastActivityRef.current = performance.now(); });
+    window.addEventListener('mousedown', () => { const miningWagons = config.cars.filter(c => c === 'mining').length; resourcesRef.current.scrap += (0.5 * (1 + (miningWagons * 0.5))); lastActivityRef.current = performance.now(); });
+    const syncInterval = setInterval(() => { setUiResources({ ...resourcesRef.current }); setRenderPuffs([...smokePuffsRef.current]); }, 100);
+    return () => clearInterval(syncInterval);
+  }, [config.cars]);
 
   return (
-    <div className={`relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none ${cpuGlitchActive ? 'glitch-active' : ''}`}>
+    <div className={`relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none ${hwStats.cpu > 92 ? 'glitch-active' : ''}`}>
       {!isElectron && <DesktopSimulator logs={logs} language={language} />}
-
-      <div 
-        className="absolute inset-0 pointer-events-none z-[50] transition-opacity duration-1000"
-        style={{ 
-          opacity: Math.max(0, (hwStats.ram - 60) / 40),
-          boxShadow: 'inset 0 0 150px rgba(255,255,255,0.2)',
-          background: 'radial-gradient(circle, transparent 60%, rgba(200,220,255,0.15) 100%)'
-        }}
-      ></div>
-
       <div ref={workerVisualRef} className="absolute z-[110] pointer-events-none transition-opacity duration-300">
         <div className="relative">
           <div className="absolute top-1/2 right-1/2 -translate-y-1/2 w-4 h-0.5 bg-blue-400/40 blur-[1px] origin-right"></div>
@@ -397,31 +339,13 @@ const App: React.FC = () => {
           </div>
         </div>
       </div>
-
       <div className="absolute inset-0 pointer-events-none z-[150] overflow-visible">
         {renderPuffs.map(puff => (
-          <div key={puff.id} className="absolute" style={{ 
-            left: puff.x, 
-            top: puff.y, 
-            transform: `translate(-50%, -50%) rotate(${puff.rotation}deg)`,
-            ['--drift-x' as any]: `${puff.driftX}px`, 
-            ['--drift-y' as any]: `${puff.driftY}px` 
-          }}>
-            <div className={`blur-[1px] ${hwStats.cpu > 90 ? 'spark' : ''}`} 
-                 style={{ 
-                   width: puff.scale * 8,
-                   height: puff.scale * 8,
-                   backgroundColor: puff.color,
-                   borderRadius: puff.borderRadius,
-                   boxShadow: `0 0 10px ${puff.color}`,
-                   animation: hwStats.cpu > 90 ? '' : `puff-world ${SMOKE_LIFETIME/1000}s forwards ease-out`, 
-                   ['--dx' as any]: `${puff.driftX}px`,
-                   ['--dy' as any]: `${puff.driftY}px`
-                 }}></div>
+          <div key={puff.id} className="absolute" style={{ left: puff.x, top: puff.y, transform: `translate(-50%, -50%) rotate(${puff.rotation}deg)`, ['--drift-x' as any]: `${puff.driftX}px`, ['--drift-y' as any]: `${puff.driftY}px` }}>
+            <div className={`blur-[1px] ${hwStats.cpu > 90 ? 'spark' : ''}`} style={{ width: puff.scale * 8, height: puff.scale * 8, backgroundColor: puff.color, borderRadius: puff.borderRadius, boxShadow: `0 0 10px ${puff.color}`, animation: hwStats.cpu > 90 ? '' : `puff-world ${SMOKE_LIFETIME/1000}s forwards ease-out`, ['--dx' as any]: `${puff.driftX}px`, ['--dy' as any]: `${puff.driftY}px` }}></div>
           </div>
         ))}
       </div>
-
       <div className="train-container">
         {config.cars.map((carType, i) => (
           <div key={i} ref={el => { carRefs.current[i] = el; }} className="absolute pointer-events-none will-change-transform z-[100]">
@@ -429,36 +353,19 @@ const App: React.FC = () => {
           </div>
         ))}
       </div>
-
       <div className="absolute inset-0 pointer-events-none z-[200]">
         <div className="absolute" style={{ left: anchorPos.x, top: anchorPos.y }}>
           <div className="relative" onMouseEnter={showHub} onMouseLeave={hideHub}>
             <DraggableAnchor language={language} onHover={setIsPanelVisible} onPositionChange={(x, y) => setAnchorPos({x, y})} initialPos={anchorPos} setIgnoreMouse={setIgnoreMouse} />
             {isPanelVisible && (
               <div className="absolute left-8 -top-24 transition-all duration-300 pointer-events-auto shadow-2xl opacity-100 translate-y-0" onMouseEnter={showHub}>
-                <ControlPanel 
-                  config={config} 
-                  resources={uiResources} 
-                  hwStats={hwStats}
-                  language={language} 
-                  onLanguageChange={setLanguage} 
-                  onChange={setConfig} 
-                  onPulse={handleManualPulse} 
-                  onUpgrade={handleUpgrade} 
-                />
+                <ControlPanel config={config} resources={uiResources} hwStats={hwStats} language={language} onLanguageChange={setLanguage} onChange={setConfig} onPulse={handleManualPulse} onUpgrade={handleUpgrade} />
               </div>
             )}
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes puff-world {
-          0% { transform: scale(0.2); opacity: 0; }
-          15% { opacity: 0.9; }
-          100% { transform: translate(var(--drift-x), var(--drift-y)) scale(4); opacity: 0; }
-        }
-      `}</style>
+      <style>{`@keyframes puff-world { 0% { transform: scale(0.2); opacity: 0; } 15% { opacity: 0.9; } 100% { transform: translate(var(--drift-x), var(--drift-y)) scale(4); opacity: 0; } }`}</style>
     </div>
   );
 };

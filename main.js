@@ -2,10 +2,11 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import si from 'systeminformation';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+let si = null;
 
 function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -44,12 +45,24 @@ function createWindow() {
   win.setMenu(null);
   win.setAlwaysOnTop(true, 'screen-saver');
 
-  // Hardware Polling
+  // Hardware Polling with Graceful Fallback
   const pollHw = setInterval(async () => {
     if (win.isDestroyed()) {
       clearInterval(pollHw);
       return;
     }
+
+    // Lazy load si to prevent crash if not installed
+    if (si === null) {
+      try {
+        const mod = await import('systeminformation');
+        si = mod.default || mod;
+      } catch (e) {
+        // Module not found, we stay in simulation mode
+        return;
+      }
+    }
+
     try {
       const [load, mem, temp] = await Promise.all([
         si.currentLoad(),
@@ -60,23 +73,14 @@ function createWindow() {
       const stats = {
         cpu: load.currentLoad,
         ram: (mem.active / mem.total) * 100,
-        temp: temp.main || 45, // Fallback if temp sensor not found
+        temp: temp.main || 45,
         isReal: true
       };
       win.webContents.send('hw-stats-update', stats);
     } catch (e) {
-      // Quietly fail if si has issues
+      // Quietly fail for polling errors
     }
   }, 2000);
-
-  // Detection of Global Context (Focus/Blur)
-  win.on('focus', () => {
-    win.webContents.send('app-focus-change', true);
-  });
-
-  win.on('blur', () => {
-    win.webContents.send('app-focus-change', false);
-  });
 
   ipcMain.on('set-ignore-mouse-events', (event, ignore, forward) => {
     const targetWin = BrowserWindow.fromWebContents(event.sender);
