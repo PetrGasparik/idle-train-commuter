@@ -9,12 +9,21 @@ export interface HardwareStats {
   temp: number;
 }
 
+export interface EnergyHub {
+  id: string;
+  x: number;
+  y: number;
+  type: 'micro' | 'fusion' | 'command' | 'terminal';
+  active: boolean;
+  waitingPassengers?: number; // Kolik lidí čeká na stanici
+}
+
 export interface TrainConfig {
   speed: number;
   cars: CarType[];
   carSpacing: number;
   color: string;
-  type: 'modern' | 'steam' | 'cargo' | 'ai'; // Base locomotive style
+  type: 'modern' | 'steam' | 'cargo' | 'ai'; 
   imageUrl?: string;
   idleCruise: boolean;
   trackMargin: number;
@@ -48,6 +57,8 @@ export interface Resources {
   energy: number;
   scrap: number;
   totalDistance: number;
+  passengers: number;
+  population: number; // Stálí obyvatelé v Habitatech
 }
 
 export interface LogEntry {
@@ -65,6 +76,7 @@ export interface WorkerState {
   y: number;
   rotation: number;
   lastAction: number;
+  currentHubId?: string;
 }
 
 export interface AppState {

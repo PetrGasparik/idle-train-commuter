@@ -7,16 +7,36 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let si = null;
+let win = null;
+
+function getVirtualDesktopBounds() {
+  const displays = screen.getAllDisplays();
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+  displays.forEach(display => {
+    const { x, y, width, height } = display.bounds;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + width);
+    maxY = Math.max(maxY, y + height);
+  });
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY
+  };
+}
 
 function createWindow() {
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.bounds;
+  const bounds = getVirtualDesktopBounds();
 
-  const win = new BrowserWindow({
-    width: width,
-    height: height,
-    x: 0,
-    y: 0,
+  win = new BrowserWindow({
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -45,20 +65,30 @@ function createWindow() {
   win.setMenu(null);
   win.setAlwaysOnTop(true, 'screen-saver');
 
+  // Handle monitor changes (plug/unplug)
+  const updateLayout = () => {
+    const newBounds = getVirtualDesktopBounds();
+    if (win) {
+      win.setBounds(newBounds);
+    }
+  };
+
+  screen.on('display-metrics-changed', updateLayout);
+  screen.on('display-added', updateLayout);
+  screen.on('display-removed', updateLayout);
+
   // Hardware Polling with Graceful Fallback
   const pollHw = setInterval(async () => {
-    if (win.isDestroyed()) {
+    if (!win || win.isDestroyed()) {
       clearInterval(pollHw);
       return;
     }
 
-    // Lazy load si to prevent crash if not installed
     if (si === null) {
       try {
         const mod = await import('systeminformation');
         si = mod.default || mod;
       } catch (e) {
-        // Module not found, we stay in simulation mode
         return;
       }
     }
@@ -77,15 +107,12 @@ function createWindow() {
         isReal: true
       };
       win.webContents.send('hw-stats-update', stats);
-    } catch (e) {
-      // Quietly fail for polling errors
-    }
+    } catch (e) {}
   }, 2000);
 
   ipcMain.on('set-ignore-mouse-events', (event, ignore, forward) => {
-    const targetWin = BrowserWindow.fromWebContents(event.sender);
-    if (targetWin) {
-      targetWin.setIgnoreMouseEvents(ignore, { forward: forward });
+    if (win) {
+      win.setIgnoreMouseEvents(ignore, { forward: forward });
     }
   });
 

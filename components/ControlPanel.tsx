@@ -1,6 +1,5 @@
-
-import React, { useState, memo, useRef, useEffect } from 'react';
-import { TrainConfig, Resources, Language, CarType, HardwareStats, LogEntry } from '../types';
+import React, { useState, memo, useRef, useEffect, useCallback } from 'react';
+import { TrainConfig, Resources, Language, CarType, HardwareStats, LogEntry, EnergyHub } from '../types';
 import { generateTrainSkin } from '../services/gemini';
 import { t } from '../locales';
 
@@ -14,24 +13,28 @@ interface ControlPanelProps {
   onLanguageChange: (lang: Language) => void;
   onChange: (config: TrainConfig) => void;
   onPulse: () => void;
-  onUpgrade: (type: 'wagon' | 'fuel' | 'mining' | 'residential' | 'cpu') => void;
+  onUpgrade: (type: 'wagon' | 'fuel' | 'mining' | 'residential' | 'cpu' | 'micro_hub' | 'fusion_hub') => void;
+  onSell: (index: number) => void;
   isGodMode?: boolean;
   onGodAddScrap?: () => void;
   isDerailed?: boolean;
   onReboot?: () => void;
   isDroneBusy?: boolean;
+  hubs: EnergyHub[];
+  asmrMode: boolean;
+  onAsmrToggle: () => void;
 }
 
-type Tab = 'vitals' | 'shop' | 'logs' | 'ai' | 'help';
+type Tab = 'vitals' | 'shop' | 'grid' | 'logs' | 'ai' | 'help';
 
-const MAX_WAGONS = 30; // Shodné s App.tsx - počet připojených vagonů
+const MAX_WAGONS = 30;
 
 const ControlPanel: React.FC<ControlPanelProps> = memo(({ 
-  config, resources, hwStats, language, logs, efficiencyLevel, onLanguageChange, onChange, onPulse, onUpgrade, isGodMode, onGodAddScrap, isDerailed, onReboot, isDroneBusy
+  config, resources, hwStats, language, logs, efficiencyLevel, onLanguageChange, onChange, onPulse, onUpgrade, onSell, isGodMode, onGodAddScrap, isDerailed, onReboot, isDroneBusy, hubs, asmrMode, onAsmrToggle
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vitals');
-  const [aiPrompt, setAiPrompt] = useState('');
   const [loading, setLoading] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
   
   const [isResizing, setIsResizing] = useState(false);
@@ -71,8 +74,14 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
     };
   }, [isResizing, config, onChange]);
 
-  const fuelPercentage = Math.min(100, Math.max(0, resources.energy));
-  const isOut = fuelPercentage <= 0;
+  const getMaxEnergy = useCallback(() => {
+    const standardWagons = config.cars.slice(1).filter(c => c === 'standard').length;
+    return 100 + (standardWagons * 10);
+  }, [config.cars]);
+
+  const maxEnergyLimit = getMaxEnergy();
+  const fuelPercentage = Math.min(100, Math.max(0, (resources.energy / maxEnergyLimit) * 100));
+  const isOut = resources.energy <= 0;
   const glitchThreshold = 92;
   const isOverheating = hwStats.cpu > glitchThreshold;
 
@@ -89,20 +98,24 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
     statusLabel = isDroneBusy ? t(language, 'statusRebooting') : t(language, 'statusDerailed');
   } else if (isOverheating) {
     statusLabel = t(language, 'statusOverheating');
-  } else if (resources.energy < 15) {
+  } else if (resources.energy < (maxEnergyLimit * 0.15)) {
     statusLabel = t(language, 'statusCritical');
   } else if (config.speed > 30) {
     statusLabel = t(language, 'statusHighSpeed');
   }
 
-  const getTempColor = (temp: number) => {
-    if (temp < 60) return 'bg-blue-400';
-    if (temp < 85) return 'bg-orange-400';
-    return 'bg-red-500 animate-pulse';
-  };
-
   const currentWagons = config.cars.length - 1;
   const isWagonLimitReached = currentWagons >= MAX_WAGONS;
+
+  const handleGenerateSkin = async () => {
+    if (!aiPrompt.trim()) return;
+    setLoading(true);
+    const skinUrl = await generateTrainSkin(aiPrompt);
+    if (skinUrl) {
+      onChange({ ...config, imageUrl: skinUrl, type: 'ai' });
+    }
+    setLoading(false);
+  };
 
   return (
     <div ref={panelRef} style={{ width: `${config.panelWidth}px` }} className={`bg-slate-950/95 backdrop-blur-3xl rounded-3xl p-5 text-white shadow-2xl border ${isDerailed ? 'border-red-500/50 ring-2 ring-red-500/20' : 'border-white/10 ring-1 ring-white/5'} overflow-hidden flex flex-col gap-4 relative transition-all duration-75`}>
@@ -116,7 +129,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">Train OS v4.2</h2>
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">Steam Train OS v5.0</h2>
             {isGodMode && <span className="text-[7px] font-black text-red-500 animate-pulse uppercase tracking-tighter">[DEV_ACTIVE]</span>}
           </div>
           <p className={`text-[7px] font-bold uppercase tracking-widest transition-colors duration-500 ${(isOut || isDerailed || isOverheating) ? 'text-red-500 animate-pulse' : ui.color}`}>
@@ -124,218 +137,236 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
           </p>
         </div>
         <div className="flex items-center gap-2">
+           <button onClick={onAsmrToggle} className={`px-2 py-0.5 rounded-full border border-white/10 text-[8px] font-bold transition-colors uppercase ${asmrMode ? 'bg-blue-600 text-white' : 'bg-white/5 text-white/60 hover:bg-white/10'}`} title={t(language, 'asmrToggle')}>ASMR (H)</button>
            <button onClick={() => onLanguageChange(language === 'en' ? 'cs' : 'en')} className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[8px] font-bold hover:bg-white/10 transition-colors uppercase">{language === 'en' ? 'CZ' : 'EN'}</button>
            <div className={`w-2 h-2 rounded-full transition-colors duration-500 ${isOut || isDerailed ? 'bg-red-500 animate-ping' : `${ui.bg} animate-pulse shadow-[0_0_8px] ${ui.glow}`}`}></div>
         </div>
       </div>
 
       <div className="flex bg-black/40 rounded-xl p-1 gap-0.5">
-        {(['vitals', 'shop', 'logs', 'ai', 'help'] as Tab[]).map((tab) => (
+        {(['vitals', 'shop', 'grid', 'logs', 'ai', 'help'] as Tab[]).map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-1.5 rounded-lg text-[7px] font-black uppercase tracking-wider transition-all truncate px-1 ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-white/40 hover:text-white/60 hover:bg-white/5'}`}>
-            {tab === 'vitals' ? t(language, 'tabCore') : tab === 'shop' ? t(language, 'tabShop') : tab === 'logs' ? t(language, 'tabLogs') : tab === 'ai' ? t(language, 'tabNeural') : t(language, 'tabHelp')}
+            {tab === 'vitals' ? t(language, 'tabCore') : tab === 'shop' ? t(language, 'tabShop') : tab === 'grid' ? t(language, 'tabGrid') : tab === 'logs' ? t(language, 'tabLogs') : tab === 'ai' ? t(language, 'tabNeural') : t(language, 'tabHelp')}
           </button>
         ))}
       </div>
 
       <div className="min-h-[260px] max-h-[420px] flex flex-col overflow-hidden">
         {activeTab === 'vitals' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-1 custom-scrollbar pb-2">
-            {isDerailed ? (
-              <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl space-y-3 flex flex-col items-center justify-center text-center">
-                 <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${isDroneBusy ? 'bg-blue-500/20' : 'bg-red-500/20'}`}>
-                    <span className={`text-xl ${isDroneBusy ? 'text-blue-400 animate-bounce' : 'text-red-500'}`}>{isDroneBusy ? '🛸' : '⚠'}</span>
-                 </div>
-                 <h3 className="text-[10px] font-black uppercase text-red-400">{t(language, 'logMeltdown')}</h3>
-                 <p className="text-[8px] text-red-400/60 leading-tight uppercase tracking-widest">{isDroneBusy ? t(language, 'statusRebooting') : t(language, 'statusDerailed')}</p>
-                 <button 
-                   onClick={onReboot} 
-                   disabled={isDroneBusy}
-                   className={`w-full mt-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-[0.2em] transition-all shadow-[0_0_20px_rgba(239,68,68,0.4)] active:scale-95 disabled:opacity-50 ${isDroneBusy ? 'bg-blue-600/40' : 'bg-red-600 hover:bg-red-500'}`}
-                 >
-                   {isDroneBusy ? t(language, 'statusRebooting') : t(language, 'rebootDispatch')}
-                 </button>
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[8px] font-black uppercase tracking-widest text-white/40">{t(language, 'fuelCell')}</span>
+                <span className={`text-[10px] font-mono ${ui.color}`}>{resources.energy.toFixed(1)}%</span>
               </div>
+              <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
+                <div className={`h-full transition-all duration-500 ${ui.bg}`} style={{ width: `${fuelPercentage}%` }}></div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                <span className="text-[7px] font-black uppercase tracking-widest text-white/40 block mb-1">{t(language, 'scrapMetal')}</span>
+                <span className="text-xl font-mono text-amber-400">{Math.floor(resources.scrap)}</span>
+              </div>
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                <span className="text-[7px] font-black uppercase tracking-widest text-white/40 block mb-1">{t(language, 'coreTemp')}</span>
+                <span className={`text-xl font-mono ${hwStats.temp > 85 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>{hwStats.temp.toFixed(1)}°</span>
+              </div>
+            </div>
+
+            <div className="bg-white/5 p-3 rounded-2xl border border-white/5 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[8px] font-black uppercase tracking-widest text-white/40">{t(language, 'coreSpeed')}</span>
+                <span className="text-[8px] font-mono text-blue-400">{config.speed} {t(language, 'unitKmH')}</span>
+              </div>
+              <input 
+                type="range" min="0" max="100" step="1" 
+                value={config.speed} 
+                onChange={(e) => onChange({ ...config, speed: parseInt(e.target.value) })}
+                className="w-full h-1 bg-black/40 rounded-full appearance-none cursor-pointer accent-blue-500"
+              />
+            </div>
+
+            {isDerailed ? (
+              <button onClick={onReboot} disabled={isDroneBusy} className={`w-full py-3 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${isDroneBusy ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20'}`}>
+                {isDroneBusy ? t(language, 'statusRebooting') : t(language, 'reboot')}
+              </button>
             ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                    <p className="text-[7px] uppercase tracking-widest text-blue-300 mb-1">{t(language, 'fuelCell')}</p>
-                    <div className="flex items-end gap-1">
-                      <span className={`text-sm font-mono font-bold leading-none transition-colors duration-500 ${ui.color}`}>{Math.floor(fuelPercentage)}</span>
-                      <span className="text-[8px] opacity-40">%</span>
-                    </div>
-                    <div className="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                       <div className={`h-full transition-all duration-500 ${ui.bg}`} style={{ width: `${fuelPercentage}%` }}></div>
-                    </div>
-                  </div>
-                  <div className="bg-white/5 p-3 rounded-2xl border border-white/5 relative overflow-hidden">
-                    <p className="text-[7px] uppercase tracking-widest text-emerald-400 mb-1">{t(language, 'scrapMetal')}</p>
-                    <div className="flex items-end gap-1">
-                      <span className="text-sm font-mono font-bold leading-none">{Math.floor(resources.scrap)}</span>
-                      <span className="text-[8px] opacity-40">{t(language, 'units')}</span>
-                    </div>
-                    <button onClick={onPulse} className="mt-2 w-full py-1.5 bg-blue-500/20 hover:bg-blue-500/40 rounded text-[7px] uppercase font-black transition-all">
-                      {t(language, 'refuel')}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-black/20 rounded-2xl border border-white/5 space-y-3">
-                  <span className="text-[7px] font-black text-white/30 uppercase tracking-widest">{t(language, 'hardwareStats')}</span>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-[8px] font-bold text-white/50">
-                       <span>CPU LOAD</span>
-                       <span className={`font-mono ${isOverheating ? 'text-red-500 animate-pulse' : 'text-white'}`}>{Math.floor(hwStats.cpu)}%</span>
-                    </div>
-                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                      <div className={`h-full transition-all duration-500 ${isOverheating ? 'bg-red-500 shadow-[0_0_5px_red]' : 'bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.5)]'}`} style={{ width: `${hwStats.cpu}%` }}></div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-[8px] font-bold text-white/50">
-                       <span>{t(language, 'coreTemp')}</span>
-                       <span className="font-mono text-white">{Math.floor(hwStats.temp)}°C</span>
-                    </div>
-                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                      <div className={`h-full transition-all duration-500 ${getTempColor(hwStats.temp)} shadow-[0_0_5px]`} style={{ width: `${Math.min(100, hwStats.temp)}%` }}></div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/5 space-y-4">
-                  <p className="text-[8px] font-black text-white/30 uppercase tracking-widest">{t(language, 'navGeometry')}</p>
-                  <div>
-                    <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
-                      <span>{t(language, 'coreSpeed')}</span>
-                      <span className="font-mono text-blue-400 font-bold uppercase">{config.speed} {t(language, 'unitKmH')}</span>
-                    </div>
-                    <input type="range" min="1" max="60" step="1" value={config.speed} onChange={(e) => onChange({...config, speed: Number(e.target.value)})} className="w-full accent-blue-500 bg-white/10 rounded-lg appearance-none h-1 cursor-pointer" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
-                        <span>{t(language, 'trackMargin')}</span>
-                        <span className="font-mono text-white font-bold">{config.trackMargin}</span>
-                      </div>
-                      <input type="range" min="0" max="100" step="1" value={config.trackMargin} onChange={(e) => onChange({...config, trackMargin: Number(e.target.value)})} className="w-full accent-white bg-white/10 rounded-lg appearance-none h-1 cursor-pointer" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
-                        <span>{t(language, 'cornerRadius')}</span>
-                        <span className="font-mono text-white font-bold">{config.cornerRadius}</span>
-                      </div>
-                      <input type="range" min="0" max="150" step="2" value={config.cornerRadius} onChange={(e) => onChange({...config, cornerRadius: Number(e.target.value)})} className="w-full accent-white bg-white/10 rounded-lg appearance-none h-1 cursor-pointer" />
-                    </div>
-                  </div>
-                </div>
-              </>
+              <button onClick={onPulse} disabled={isOut} className={`w-full py-3 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${isOut ? 'bg-white/5 text-white/20' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 active:scale-95'}`}>
+                {t(language, 'refuel')}
+              </button>
             )}
           </div>
         )}
 
         {activeTab === 'shop' && (
-          <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-1 custom-scrollbar">
-             <div className="flex justify-between items-center mb-2">
-               <p className="text-[8px] uppercase tracking-widest text-white/30">{t(language, 'upgrades')}</p>
-               <div className="flex gap-2">
-                 <span className="text-[7px] text-blue-400 font-bold uppercase tracking-tighter">{t(language, 'wagonCapacity')}: {currentWagons}/{MAX_WAGONS}</span>
-                 <span className="text-[7px] text-blue-400 font-bold uppercase tracking-tighter">{t(language, 'lvlEfficiency')}: {efficiencyLevel}</span>
-               </div>
-             </div>
-             
-             <button onClick={() => onUpgrade('wagon')} disabled={resources.scrap < 10 || isWagonLimitReached} className="w-full flex justify-between items-center p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 disabled:opacity-30 transition-all group">
-               <div className="flex flex-col items-start text-left">
-                 <span className="text-[9px] font-bold group-hover:text-blue-400 transition-colors">{t(language, 'addWagon')}</span>
-                 <span className="text-[7px] text-white/40">{t(language, 'expansionUnit')}</span>
-               </div>
-               <div className={`px-2 py-1 rounded-lg text-[8px] font-mono font-bold border ${isWagonLimitReached ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}>{isWagonLimitReached ? t(language, 'maxReached') : '10 SC'}</div>
-             </button>
+          <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="bg-white/5 p-3 rounded-2xl border border-white/5 mb-4">
+              <div className="flex justify-between items-center">
+                <span className="text-[8px] font-black uppercase tracking-widest text-white/40">{t(language, 'scrapMetal')}</span>
+                <span className="text-sm font-mono text-amber-400">{Math.floor(resources.scrap)}</span>
+              </div>
+            </div>
 
-             <button onClick={() => onUpgrade('mining')} disabled={resources.scrap < 15 || isWagonLimitReached} className="w-full flex justify-between items-center p-2.5 rounded-xl bg-yellow-500/5 hover:bg-yellow-500/10 border border-yellow-500/10 disabled:opacity-30 transition-all group">
-               <div className="flex flex-col items-start text-left">
-                 <span className="text-[9px] font-bold group-hover:text-yellow-400 transition-colors">{t(language, 'addMiningWagon')}</span>
-                 <span className="text-[7px] text-white/40">{t(language, 'miningUnit')}</span>
-               </div>
-               <div className={`px-2 py-1 rounded-lg text-[8px] font-mono font-bold border ${isWagonLimitReached ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'}`}>{isWagonLimitReached ? t(language, 'maxReached') : '15 SC'}</div>
-             </button>
+            {[
+              { id: 'wagon', label: t(language, 'addWagon'), desc: t(language, 'expansionUnit'), cost: 10, theme: 'slate' },
+              { id: 'mining', label: t(language, 'addMiningWagon'), desc: t(language, 'miningUnit'), cost: 15, theme: 'yellow' },
+              { id: 'residential', label: t(language, 'addResidentialWagon'), desc: t(language, 'residentialUnit'), cost: 20, theme: 'cyan' },
+              { id: 'fuel', label: t(language, 'efficiencyCore'), desc: `${t(language, 'permanentBoost')} (Lv.${efficiencyLevel})`, cost: 25, theme: 'emerald' },
+              { id: 'cpu', label: t(language, 'cpuUpgrade'), desc: `${t(language, 'cpuUpgradeDesc')} (Lv.${config.cpuUpgradeLevel})`, cost: 30, theme: 'blue' },
+              { id: 'micro_hub', label: t(language, 'addMicroHub'), desc: t(language, 'microHubDesc'), cost: 50, theme: 'blue' },
+              { id: 'fusion_hub', label: t(language, 'addFusionHub'), desc: t(language, 'fusionHubDesc'), cost: 150, theme: 'purple' },
+            ].map((item) => {
+              const canAfford = resources.scrap >= item.cost;
+              const isWagon = ['wagon', 'mining', 'residential'].includes(item.id);
+              const disabled = !canAfford || (isWagon && isWagonLimitReached);
+              
+              const themeColors: Record<string, string> = {
+                slate: 'border-slate-500/30 hover:bg-slate-500/10',
+                yellow: 'border-yellow-500/30 hover:bg-yellow-500/10',
+                cyan: 'border-cyan-500/30 hover:bg-cyan-500/10',
+                emerald: 'border-emerald-500/30 hover:bg-emerald-500/10',
+                blue: 'border-blue-500/30 hover:bg-blue-500/10',
+                purple: 'border-purple-500/30 hover:bg-purple-500/10',
+              };
 
-             <button onClick={() => onUpgrade('residential')} disabled={resources.scrap < 20 || isWagonLimitReached} className="w-full flex justify-between items-center p-2.5 rounded-xl bg-cyan-500/5 hover:bg-cyan-500/10 border border-cyan-500/10 disabled:opacity-30 transition-all group">
-               <div className="flex flex-col items-start text-left">
-                 <span className="text-[9px] font-bold group-hover:text-cyan-400 transition-colors">{t(language, 'addResidentialWagon')}</span>
-                 <span className="text-[7px] text-white/40">{t(language, 'residentialUnit')}</span>
-               </div>
-               <div className={`px-2 py-1 rounded-lg text-[8px] font-mono font-bold border ${isWagonLimitReached ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'}`}>{isWagonLimitReached ? t(language, 'maxReached') : '20 SC'}</div>
-             </button>
+              return (
+                <button 
+                  key={item.id} 
+                  onClick={() => onUpgrade(item.id as any)}
+                  disabled={disabled}
+                  className={`w-full p-3 rounded-2xl border text-left transition-all flex justify-between items-center group ${disabled ? 'bg-black/20 border-white/5 opacity-40 cursor-not-allowed' : `bg-white/5 ${themeColors[item.theme]} cursor-pointer active:scale-[0.98]`}`}
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[9px] font-black uppercase tracking-wider">{item.label}</span>
+                    <span className="text-[7px] text-white/40 group-hover:text-white/60 transition-colors uppercase">{item.desc}</span>
+                  </div>
+                  <div className={`px-2 py-1 rounded-lg text-[9px] font-mono border ${canAfford ? 'text-amber-400 border-amber-400/30' : 'text-red-400 border-red-400/30'}`}>
+                    {item.cost}
+                  </div>
+                </button>
+              );
+            })}
 
-             <div className="h-px bg-white/5 my-2"></div>
+            <div className="mt-4 pt-4 border-t border-white/5">
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 mb-2 block">{t(language, 'tabInventory')}</span>
+              <div className="grid grid-cols-5 gap-1">
+                {config.cars.map((car, i) => (
+                  <button key={i} onClick={() => onSell(i)} disabled={i === 0} className={`h-8 rounded-lg border flex items-center justify-center text-[7px] font-black uppercase transition-all ${i === 0 ? 'bg-blue-600/40 border-blue-400/20 text-white/60' : 'bg-white/5 border-white/10 hover:bg-red-500/20 hover:border-red-500/30 text-white/40 hover:text-red-400'}`}>
+                    {i === 0 ? 'L' : i}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
-             <button onClick={() => onUpgrade('fuel')} disabled={resources.scrap < 25} className="w-full flex justify-between items-center p-2.5 rounded-xl bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/10 disabled:opacity-30 transition-all group">
-               <div className="flex flex-col items-start text-left">
-                 <span className="text-[9px] font-bold group-hover:text-blue-400 transition-colors">{t(language, 'efficiencyCore')}</span>
-                 <span className="text-[7px] text-white/40">{t(language, 'permanentBoost')}</span>
-               </div>
-               <div className="px-2 py-1 bg-blue-500/20 rounded-lg text-[8px] font-mono font-bold text-blue-400 border border-blue-500/30">25 SC</div>
-             </button>
-
-             <button onClick={() => onUpgrade('cpu')} disabled={resources.scrap < 30} className="w-full flex justify-between items-center p-2.5 rounded-xl bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 disabled:opacity-30 transition-all group">
-               <div className="flex flex-col items-start text-left">
-                 <span className="text-[9px] font-bold group-hover:text-red-400 transition-colors">{t(language, 'cpuUpgrade')}</span>
-                 <span className="text-[7px] text-white/40">{t(language, 'cpuUpgradeDesc')}</span>
-               </div>
-               <div className="px-2 py-1 bg-red-500/20 rounded-lg text-[8px] font-mono font-bold text-red-400 border border-red-500/30">30 SC</div>
-             </button>
+        {activeTab === 'grid' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/40 block mb-3">{t(language, 'hubCount')}</span>
+              <div className="flex items-center gap-4">
+                <span className="text-3xl font-mono text-purple-400">{hubs.length}</span>
+                <div className="flex-1 flex gap-1 h-2">
+                  {hubs.map((h, i) => (
+                    <div key={i} className={`flex-1 rounded-full ${h.type === 'command' ? 'bg-blue-400' : h.type === 'fusion' ? 'bg-purple-500' : 'bg-blue-400/40'}`}></div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <span className="text-[8px] font-black uppercase tracking-widest text-white/20 block">{t(language, 'helpGridTitle')}</span>
+              <p className="text-[8px] text-white/40 leading-relaxed uppercase">{t(language, 'helpGridDesc')}</p>
+            </div>
           </div>
         )}
 
         {activeTab === 'logs' && (
-          <div className="flex-1 flex flex-col bg-black/40 rounded-2xl border border-white/5 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="p-2 border-b border-white/5 bg-white/5 flex justify-between items-center">
-              <span className="text-[7px] font-black uppercase tracking-widest text-white/40">{t(language, 'eventStream')}</span>
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 font-mono space-y-2 custom-scrollbar text-[8px]">
-              {logs.map((log) => (
-                <div key={log.id} className="flex gap-2 border-l border-white/10 pl-2 py-0.5">
+          <div className="flex-1 font-mono text-[9px] bg-black/40 rounded-2xl border border-white/5 p-3 overflow-y-auto custom-scrollbar space-y-1.5 scroll-smooth">
+            {logs.length === 0 ? (
+              <div className="h-full flex items-center justify-center opacity-20 uppercase tracking-[0.2em]">{t(language, 'noActiveData')}</div>
+            ) : (
+              logs.map((log) => (
+                <div key={log.id} className="flex gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
                   <span className="text-white/20 shrink-0">[{log.timestamp}]</span>
-                  <span className={`${log.type === 'success' ? 'text-emerald-400' : log.type === 'warning' ? 'text-amber-400' : log.type === 'input' ? 'text-sky-400' : 'text-white/60'}`}>
-                    <span className="mr-2 opacity-50">{log.type === 'input' ? '>' : '#'}</span>
+                  <span className={`
+                    ${log.type === 'success' ? 'text-emerald-400' : ''}
+                    ${log.type === 'warning' ? 'text-amber-400' : ''}
+                    ${log.type === 'input' ? 'text-sky-400' : ''}
+                    ${log.type === 'info' ? 'text-white/60' : ''}
+                  `}>
                     {log.message}
                   </span>
                 </div>
-              ))}
-              <div ref={logEndRef} />
-            </div>
+              ))
+            )}
+            <div ref={logEndRef} />
           </div>
         )}
 
         {activeTab === 'ai' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <p className="text-[8px] uppercase tracking-widest text-white/30 mb-2">{t(language, 'neuralFabricator')}</p>
-            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-3">
-              <input type="text" placeholder={t(language, 'neuralPrompt')} value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[9px] focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all text-white placeholder:text-white/20" />
-              <button onClick={async () => { setLoading(true); const url = await generateTrainSkin(aiPrompt); if (url) onChange({...config, type: 'ai', imageUrl: url}); setLoading(false); }} disabled={loading || !aiPrompt} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-white/5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/10">
-                {loading ? t(language, 'processing') : t(language, 'fabricateSkin')}
-              </button>
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-4">
+              <span className="text-[8px] font-black uppercase tracking-widest text-blue-400 block">{t(language, 'neuralFabricator')}</span>
+              <div className="space-y-2">
+                <textarea 
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder={t(language, 'neuralPrompt')}
+                  className="w-full h-20 bg-black/40 border border-white/10 rounded-xl p-3 text-[10px] text-white placeholder:text-white/20 focus:outline-none focus:border-blue-500/50 transition-colors resize-none uppercase"
+                />
+                <button 
+                  onClick={handleGenerateSkin}
+                  disabled={loading || !aiPrompt.trim()}
+                  className={`w-full py-3 rounded-xl text-[9px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${loading || !aiPrompt.trim() ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 active:scale-95'}`}
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                      {t(language, 'processing')}
+                    </>
+                  ) : t(language, 'fabricateSkin')}
+                </button>
+              </div>
             </div>
+            <p className="text-[7px] text-white/20 uppercase text-center">{t(language, 'sysInit')}</p>
           </div>
         )}
 
         {activeTab === 'help' && (
-          <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 pb-2">
-            <section><h3 className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">{t(language, 'helpEconomyTitle')}</h3><p className="text-[8px] text-white/60 leading-relaxed">{t(language, 'helpEconomyDesc')}</p></section>
-            <section><h3 className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">{t(language, 'helpEfficiencyTitle')}</h3><p className="text-[8px] text-white/60 leading-relaxed">{t(language, 'helpEfficiencyDesc')}</p></section>
-            <section><h3 className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">{t(language, 'helpCpuTitle')}</h3><p className="text-[8px] text-white/60 leading-relaxed">{t(language, 'helpCpuDesc')}</p></section>
-            <section><h3 className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">{t(language, 'helpNavTitle')}</h3><p className="text-[8px] text-white/60 leading-relaxed">{t(language, 'helpNavDesc')}</p></section>
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-y-auto pr-2 custom-scrollbar pb-4">
+            {[
+              { title: t(language, 'helpEconomyTitle'), desc: t(language, 'helpEconomyDesc') },
+              { title: t(language, 'helpGridTitle'), desc: t(language, 'helpGridDesc') },
+              { title: t(language, 'helpEfficiencyTitle'), desc: t(language, 'helpEfficiencyDesc') },
+              { title: t(language, 'helpNavTitle'), desc: t(language, 'helpNavDesc') },
+            ].map((item, i) => (
+              <div key={i} className="bg-white/5 p-3 rounded-2xl border border-white/5 space-y-1.5">
+                <span className="text-[8px] font-black uppercase tracking-widest text-blue-400 block">{item.title}</span>
+                <p className="text-[8px] text-white/60 leading-relaxed uppercase">{item.desc}</p>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      <div className="pt-2 border-t border-white/5 flex justify-between items-center opacity-30 group-hover:opacity-100 transition-opacity">
-        <span className="text-[6px] font-bold tracking-[0.3em]">PERIMETER_DRIVE</span>
-        <span className="text-[6px] font-mono">X-{Math.floor(resources.totalDistance)}LY</span>
-      </div>
-
-      <style>{`.custom-scrollbar::-webkit-scrollbar { width: 3px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }`}</style>
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        
+        input[type=range]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          height: 12px;
+          width: 12px;
+          border-radius: 50%;
+          background: #3b82f6;
+          box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 });
