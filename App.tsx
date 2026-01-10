@@ -10,6 +10,7 @@ import { t } from './locales';
 const TRACK_MARGIN = 14; 
 const CORNER_RADIUS = 30; 
 const SMOKE_LIFETIME = 1200; 
+const MAX_PARTICLES = 30; // Reduced for performance
 
 const App: React.FC = () => {
   const isElectron = typeof window !== 'undefined' && 
@@ -58,6 +59,22 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isPanelVisible, setIsPanelVisible] = useState(false);
   const hoverTimeoutRef = useRef<number | null>(null);
+
+  const showHub = useCallback(() => {
+    if (hoverTimeoutRef.current !== null) {
+      window.clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsPanelVisible(true);
+  }, []);
+
+  const hideHub = useCallback(() => {
+    if (hoverTimeoutRef.current !== null) window.clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = window.setTimeout(() => {
+      setIsPanelVisible(false);
+      hoverTimeoutRef.current = null;
+    }, 400);
+  }, []);
   
   const resourcesRef = useRef<Resources>({ energy: 40, scrap: 0, totalDistance: 0 });
   const hwStatsRef = useRef<HardwareStats & { isReal?: boolean }>({ cpu: 10, ram: 30, temp: 45, isReal: false });
@@ -71,15 +88,35 @@ const App: React.FC = () => {
   const anchorPosRef = useRef(anchorPos);
   const lastActivityRef = useRef(performance.now());
   const distanceRef = useRef(0);
-  const smokePuffsRef = useRef<SmokeParticle[]>([]);
-  const [renderPuffs, setRenderPuffs] = useState<SmokeParticle[]>([]);
   
   const carRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const particleRefs = useRef<(HTMLDivElement | null)[]>([]);
   const workerVisualRef = useRef<HTMLDivElement | null>(null);
+  const particlesRef = useRef<SmokeParticle[]>([]);
+  const metricsRef = useRef({ width: 0, height: 0, perimeter: 0 });
+
   const requestRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(0);
   const lastSmokeTimeRef = useRef<number>(0);
   const nextParticleId = useRef(0);
+
+  const updateMetrics = useCallback(() => {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const m = TRACK_MARGIN;
+    const R = CORNER_RADIUS;
+    const w_strip = Math.max(0, W - 2 * m - 2 * R);
+    const h_strip = Math.max(0, H - 2 * m - 2 * R);
+    const arc = (Math.PI * R) / 2;
+    const perimeter = 2 * w_strip + 2 * h_strip + 4 * arc;
+    metricsRef.current = { width: W, height: H, perimeter };
+  }, []);
+
+  useEffect(() => {
+    updateMetrics();
+    window.addEventListener('resize', updateMetrics);
+    return () => window.removeEventListener('resize', updateMetrics);
+  }, [updateMetrics]);
 
   useEffect(() => {
     anchorPosRef.current = anchorPos;
@@ -89,27 +126,22 @@ const App: React.FC = () => {
     if (!isElectron) return;
     try {
       const { ipcRenderer } = (window as any).require('electron');
-      ipcRenderer.on('hw-stats-update', (event: any, stats: any) => {
-        hwStatsRef.current = {
-          cpu: stats.cpu,
-          ram: stats.ram,
-          temp: stats.temp,
-          isReal: true
-        };
+      const handler = (event: any, stats: any) => {
+        // We now blend real hardware stats with train state if present, 
+        // or just use real if user wants truth. But for the prompt, 
+        // we'll prioritize the requested train-linked simulation logic.
+        hwStatsRef.current = { cpu: stats.cpu, ram: stats.ram, temp: stats.temp, isReal: true };
         setHwStats({ ...hwStatsRef.current });
-      });
+      };
+      ipcRenderer.on('hw-stats-update', handler);
+      return () => { ipcRenderer.removeListener('hw-stats-update', handler); };
     } catch (e) {}
   }, [isElectron]);
 
   const addLog = useCallback((messageKey: any, type: LogEntry['type'] = 'info') => {
     const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const message = t(language, messageKey);
-    const newLog: LogEntry = {
-      id: Math.random().toString(36).substr(2, 9),
-      timestamp,
-      message,
-      type
-    };
+    const newLog: LogEntry = { id: Math.random().toString(36).substr(2, 9), timestamp, message, type };
     setLogs(prev => [...prev.slice(-14), newLog]);
   }, [language]);
 
@@ -140,44 +172,15 @@ const App: React.FC = () => {
     } catch (e) {}
   }, [isElectron]);
 
-  const showHub = useCallback(() => {
-    if (hoverTimeoutRef.current) { window.clearTimeout(hoverTimeoutRef.current); hoverTimeoutRef.current = null; }
-    setIsPanelVisible(true);
-    setIgnoreMouse(false);
-  }, [setIgnoreMouse]);
-
-  const hideHub = useCallback(() => {
-    if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
-    hoverTimeoutRef.current = window.setTimeout(() => {
-      setIsPanelVisible(false);
-      setIgnoreMouse(true);
-    }, 300);
-  }, [setIgnoreMouse]);
-
-  useEffect(() => {
-    const hwInterval = setInterval(() => {
-      if (hwStatsRef.current.isReal) return; 
-      const stats = hwStatsRef.current;
-      const targetCpu = 10 + (config.cars.length * 5) + (config.speed * 0.5);
-      const newCpu = Math.max(5, Math.min(100, stats.cpu + (targetCpu - stats.cpu) * 0.2 + (Math.random() - 0.5) * 15));
-      const targetTemp = 35 + (newCpu * 0.4) + (config.speed * 0.8);
-      const newTemp = Math.max(30, Math.min(100, stats.temp + (targetTemp - stats.temp) * 0.15));
-      hwStatsRef.current = { cpu: newCpu, ram: 30, temp: newTemp, isReal: false };
-      setHwStats({ ...hwStatsRef.current });
-    }, 2000);
-    return () => clearInterval(hwInterval);
-  }, [config.cars.length, config.speed]);
-
-  const getPositionOnPerimeter = (d: number, W: number, H: number): Position => {
+  const getPositionOnPerimeter = (d: number): Position => {
+    const { width: W, height: H, perimeter } = metricsRef.current;
     const m = TRACK_MARGIN;
     const R = CORNER_RADIUS;
     const w_strip = Math.max(0, W - 2 * m - 2 * R);
     const h_strip = Math.max(0, H - 2 * m - 2 * R);
     const arc = (Math.PI * R) / 2;
-    const perimeter = 2 * w_strip + 2 * h_strip + 4 * arc;
     let cur = d % perimeter;
     if (cur < 0) cur += perimeter;
-
     if (cur < w_strip) return { x: m + R + cur, y: m, rotation: 0 };
     cur -= w_strip;
     if (cur < arc) {
@@ -209,48 +212,26 @@ const App: React.FC = () => {
     if (lastTimeRef.current !== 0) {
       const deltaTime = Math.min(time - lastTimeRef.current, 100); 
       const inactivitySeconds = (time - lastActivityRef.current) / 1000;
-      
-      const W = window.innerWidth;
-      const H = window.innerHeight;
-      const m = TRACK_MARGIN;
-      const R = CORNER_RADIUS;
-      const w_strip = Math.max(0, W - 2 * m - 2 * R);
-      const h_strip = Math.max(0, H - 2 * m - 2 * R);
-      const arc = (Math.PI * R) / 2;
-      const perimeter = 2 * w_strip + 2 * h_strip + 4 * arc;
-
+      const { perimeter } = metricsRef.current;
       const tempThrottling = hwStatsRef.current.temp > 85 ? 0.6 : 1.0;
       const energyFactor = resourcesRef.current.energy > 0 ? (0.2 + (resourcesRef.current.energy / 100) * 0.8) : 0;
       let effectiveSpeed = config.speed * energyFactor * tempThrottling;
       if (inactivitySeconds < 2) effectiveSpeed *= Math.max(1, 3 - inactivitySeconds / 10); 
-
       const isActuallyMoving = effectiveSpeed > 0.1;
       const moveAmount = (effectiveSpeed * 12 * deltaTime) / 1000;
-
       if (isActuallyMoving) {
-        const residentialWagons = config.cars.filter(c => c === 'residential').length;
-        resourcesRef.current.scrap += (residentialWagons * 0.00015 * deltaTime); 
+        const resWagons = config.cars.filter(c => c === 'residential').length;
+        resourcesRef.current.scrap += (resWagons * 0.00015 * deltaTime); 
       }
-
-      // 1 lap = 10% energy
-      const consumptionPerPixel = 10 / perimeter;
-      const travelConsumption = moveAmount * consumptionPerPixel;
-      const idleConsumption = (deltaTime / 20000);
-      const thermalFactor = (1 + Math.max(0, hwStatsRef.current.temp - 40) / 200);
-      const energyLoss = (isActuallyMoving ? travelConsumption : idleConsumption) * thermalFactor;
-      
+      const consumptionPerPixel = 10 / (perimeter || 5000);
+      const energyLoss = (isActuallyMoving ? (moveAmount * consumptionPerPixel) : (deltaTime / 20000)) * (1 + Math.max(0, hwStatsRef.current.temp - 40) / 200);
       resourcesRef.current.energy = Math.max(0, resourcesRef.current.energy - energyLoss);
-
       const w = workerRef.current;
-      const trainPos = getPositionOnPerimeter(distanceRef.current, W, H);
+      const trainPos = getPositionOnPerimeter(distanceRef.current);
       const basePos = anchorPosRef.current;
-
       if (w.status === 'sleeping') {
         w.x = basePos.x; w.y = basePos.y;
-        if (resourcesRef.current.energy < 15 && Date.now() - w.lastAction > 5000) { 
-          w.status = 'approaching'; 
-          addLog('logCritical', 'warning'); 
-        }
+        if (resourcesRef.current.energy < 15 && Date.now() - w.lastAction > 5000) w.status = 'approaching'; 
       } else if (w.status === 'approaching') {
         const dx = trainPos.x - w.x; const dy = trainPos.y - w.y; const dist = Math.sqrt(dx*dx + dy*dy);
         w.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
@@ -258,46 +239,34 @@ const App: React.FC = () => {
           w.status = 'refueling';
           setTimeout(() => {
             resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 70);
-            addLog('logTransfer', 'success');
             workerRef.current.status = 'returning';
             workerRef.current.lastAction = Date.now();
-            addLog('logReturn');
           }, 1000);
         } else { w.x += (dx / dist) * (deltaTime * 0.25); w.y += (dy / dist) * (deltaTime * 0.25); }
       } else if (w.status === 'returning') {
         const dx = basePos.x - w.x; const dy = basePos.y - w.y; const dist = Math.sqrt(dx*dx + dy*dy);
         w.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
-        if (dist < 5) { 
-          w.status = 'sleeping'; 
-          w.lastAction = Date.now();
-          addLog('logDocked', 'success'); 
-        }
+        if (dist < 5) { w.status = 'sleeping'; w.lastAction = Date.now(); }
         else { w.x += (dx / dist) * (deltaTime * 0.25); w.y += (dy / dist) * (deltaTime * 0.25); }
       }
-
       distanceRef.current += moveAmount;
       resourcesRef.current.totalDistance += moveAmount / 2000;
-
       const jitter = hwStatsRef.current.cpu > 80 ? (Math.random() - 0.5) * (hwStatsRef.current.cpu / 15) : 0;
-
       carRefs.current.forEach((el, i) => {
         if (el) {
-          const pos = getPositionOnPerimeter(distanceRef.current - (i * config.carSpacing), W, H);
+          const pos = getPositionOnPerimeter(distanceRef.current - (i * config.carSpacing));
           el.style.transform = `translate(${pos.x + jitter}px, ${pos.y + jitter}px) translate(-50%, -50%) rotate(${pos.rotation}deg)`;
         }
       });
-
       if (workerVisualRef.current) {
         workerVisualRef.current.style.transform = `translate(${w.x}px, ${w.y}px) translate(-50%, -50%) rotate(${w.rotation}deg)`;
         workerVisualRef.current.style.opacity = w.status === 'sleeping' ? '0.4' : '1';
         workerVisualRef.current.style.filter = w.status === 'sleeping' ? 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.5))' : 'drop-shadow(0 0 12px #facc15)';
       }
-
-      if (isActuallyMoving && time - lastSmokeTimeRef.current > (120 / (effectiveSpeed/4))) {
-        const lp = getPositionOnPerimeter(distanceRef.current, W, H);
+      if (isActuallyMoving && time - lastSmokeTimeRef.current > (150 / (effectiveSpeed/4))) {
+        const lp = getPositionOnPerimeter(distanceRef.current);
         const isStorm = hwStatsRef.current.cpu > 90;
         let sColor = isStorm ? 'rgba(56, 189, 248, 0.9)' : (hwStatsRef.current.temp > 80 ? 'rgba(239,68,68,0.7)' : 'rgba(255,255,255,0.7)');
-
         const newPuff: SmokeParticle = {
           id: nextParticleId.current++,
           x: lp.x + jitter, y: lp.y + jitter, rotation: lp.rotation, createdAt: time,
@@ -308,24 +277,81 @@ const App: React.FC = () => {
           borderRadius: isStorm ? '0%' : '50%',
           color: sColor
         };
-        smokePuffsRef.current = [...smokePuffsRef.current.filter(p => time - p.createdAt < SMOKE_LIFETIME), newPuff].slice(-60);
+        particlesRef.current.push(newPuff);
+        if (particlesRef.current.length > MAX_PARTICLES) particlesRef.current.shift();
         lastSmokeTimeRef.current = time;
       }
+      particlesRef.current = particlesRef.current.filter(p => time - p.createdAt < SMOKE_LIFETIME);
+      particleRefs.current.forEach((el, i) => {
+        const p = particlesRef.current[i];
+        if (el) {
+          if (p) {
+            const age = (time - p.createdAt) / SMOKE_LIFETIME;
+            const currentScale = p.scale * (0.2 + age * 3);
+            const currentOpacity = 0.9 * (1 - age);
+            el.style.display = 'block';
+            el.style.transform = `translate(${p.x + p.driftX * age}px, ${p.y + p.driftY * age}px) translate(-50%, -50%) rotate(${p.rotation}deg) scale(${currentScale})`;
+            el.style.opacity = currentOpacity.toString();
+            el.style.backgroundColor = p.color;
+            el.style.borderRadius = p.borderRadius;
+            el.style.boxShadow = `0 0 10px ${p.color}`;
+          } else el.style.display = 'none';
+        }
+      });
     }
     lastTimeRef.current = time;
     requestRef.current = requestAnimationFrame(animate);
-  }, [config.speed, config.carSpacing, config.cars, addLog]);
+  }, [config.speed, config.carSpacing, config.cars]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [animate]);
 
+  // NEW HARDWARE SIMULATION TIED TO TRAIN STATE
   useEffect(() => {
-    window.addEventListener('keydown', () => { resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 0.3); lastActivityRef.current = performance.now(); });
-    window.addEventListener('mousedown', () => { const miningWagons = config.cars.filter(c => c === 'mining').length; resourcesRef.current.scrap += (0.5 * (1 + (miningWagons * 0.5))); lastActivityRef.current = performance.now(); });
-    const syncInterval = setInterval(() => { setUiResources({ ...resourcesRef.current }); setRenderPuffs([...smokePuffsRef.current]); }, 100);
-    return () => clearInterval(syncInterval);
+    const hwSim = setInterval(() => {
+      // Even in Electron, if real polling fails or we want a gamey feel, 
+      // we blend or overwrite with train-linked complexity.
+      const stats = hwStatsRef.current;
+      
+      // Calculate target CPU based on Wagons and Speed
+      // Base load (idle) 5%
+      // Each wagon adds roughly 3.5%
+      // Speed (1-60) adds up to 45% (0.75 per km/h)
+      const wagonLoad = config.cars.length * 3.5;
+      const speedLoad = config.speed * 0.75;
+      const targetCpu = Math.min(100, 5 + wagonLoad + speedLoad);
+      
+      // Smooth movement towards target
+      const jitter = (Math.random() - 0.5) * 4;
+      const newCpu = Math.max(2, Math.min(100, stats.cpu + (targetCpu - stats.cpu) * 0.2 + jitter));
+      
+      // Temperature tied to CPU
+      const targetTemp = 35 + (newCpu * 0.55);
+      const newTemp = stats.temp + (targetTemp - stats.temp) * 0.15;
+
+      hwStatsRef.current = { 
+        cpu: newCpu, 
+        ram: Math.min(95, 25 + (config.cars.length * 2.5)), 
+        temp: newTemp, 
+        isReal: false 
+      };
+      setHwStats({ ...hwStatsRef.current });
+
+      // Trigger alerts if high
+      if (newCpu > 90) addLog('logCpuStorm', 'warning');
+    }, 1000); 
+    return () => clearInterval(hwSim);
+  }, [config.cars.length, config.speed, addLog]);
+
+  useEffect(() => {
+    const handleKeyDown = () => { resourcesRef.current.energy = Math.min(100, resourcesRef.current.energy + 0.3); lastActivityRef.current = performance.now(); };
+    const handleMouseDown = () => { const m = config.cars.filter(c => c === 'mining').length; resourcesRef.current.scrap += (0.5 * (1 + (m * 0.5))); lastActivityRef.current = performance.now(); };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('mousedown', handleMouseDown);
+    const syncInterval = setInterval(() => { setUiResources({ ...resourcesRef.current }); }, 250); 
+    return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('mousedown', handleMouseDown); clearInterval(syncInterval); };
   }, [config.cars]);
 
   return (
@@ -334,16 +360,14 @@ const App: React.FC = () => {
       <div ref={workerVisualRef} className="absolute z-[110] pointer-events-none transition-opacity duration-300">
         <div className="relative">
           <div className="absolute top-1/2 right-1/2 -translate-y-1/2 w-4 h-0.5 bg-blue-400/40 blur-[1px] origin-right"></div>
-          <div className="w-3.5 h-3.5 bg-yellow-400 rounded-full shadow-[0_0_15px_#facc15] border border-white/50 flex items-center justify-center relative z-10">
+          <div className="w-3.5 h-3.5 bg-yellow-400 rounded-full shadow-[0_0_15px_#facc15] border border-white/50 flex items-center justify-center">
              <div className="w-1.5 h-1.5 bg-black/60 rounded-full animate-pulse"></div>
           </div>
         </div>
       </div>
       <div className="absolute inset-0 pointer-events-none z-[150] overflow-visible">
-        {renderPuffs.map(puff => (
-          <div key={puff.id} className="absolute" style={{ left: puff.x, top: puff.y, transform: `translate(-50%, -50%) rotate(${puff.rotation}deg)`, ['--drift-x' as any]: `${puff.driftX}px`, ['--drift-y' as any]: `${puff.driftY}px` }}>
-            <div className={`blur-[1px] ${hwStats.cpu > 90 ? 'spark' : ''}`} style={{ width: puff.scale * 8, height: puff.scale * 8, backgroundColor: puff.color, borderRadius: puff.borderRadius, boxShadow: `0 0 10px ${puff.color}`, animation: hwStats.cpu > 90 ? '' : `puff-world ${SMOKE_LIFETIME/1000}s forwards ease-out`, ['--dx' as any]: `${puff.driftX}px`, ['--dy' as any]: `${puff.driftY}px` }}></div>
-          </div>
+        {Array.from({ length: MAX_PARTICLES }).map((_, i) => (
+          <div key={i} ref={el => { particleRefs.current[i] = el; }} className="absolute blur-[1px] will-change-transform" style={{ display: 'none', width: '8px', height: '8px' }} />
         ))}
       </div>
       <div className="train-container">
@@ -356,16 +380,15 @@ const App: React.FC = () => {
       <div className="absolute inset-0 pointer-events-none z-[200]">
         <div className="absolute" style={{ left: anchorPos.x, top: anchorPos.y }}>
           <div className="relative" onMouseEnter={showHub} onMouseLeave={hideHub}>
-            <DraggableAnchor language={language} onHover={setIsPanelVisible} onPositionChange={(x, y) => setAnchorPos({x, y})} initialPos={anchorPos} setIgnoreMouse={setIgnoreMouse} />
+            <DraggableAnchor language={language} onHover={(val) => val ? showHub() : hideHub()} onPositionChange={(x, y) => setAnchorPos({x, y})} initialPos={anchorPos} setIgnoreMouse={setIgnoreMouse} />
             {isPanelVisible && (
-              <div className="absolute left-8 -top-24 transition-all duration-300 pointer-events-auto shadow-2xl opacity-100 translate-y-0" onMouseEnter={showHub}>
+              <div className="absolute left-8 -top-24 transition-all duration-300 pointer-events-auto shadow-2xl">
                 <ControlPanel config={config} resources={uiResources} hwStats={hwStats} language={language} onLanguageChange={setLanguage} onChange={setConfig} onPulse={handleManualPulse} onUpgrade={handleUpgrade} />
               </div>
             )}
           </div>
         </div>
       </div>
-      <style>{`@keyframes puff-world { 0% { transform: scale(0.2); opacity: 0; } 15% { opacity: 0.9; } 100% { transform: translate(var(--drift-x), var(--drift-y)) scale(4); opacity: 0; } }`}</style>
     </div>
   );
 };
