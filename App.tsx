@@ -11,7 +11,7 @@ import { t } from './locales';
 const SMOKE_LIFETIME = 1200; 
 const MAX_PARTICLES = 30; 
 const GLITCH_THRESHOLD = 92; 
-const MAX_STORM_DURATION = 5; // Seconds before meltdown
+const MAX_STORM_DURATION = 5; 
 const MAX_WAGONS = 30;
 
 const App: React.FC = () => {
@@ -362,7 +362,6 @@ const App: React.FC = () => {
         workerVisualRef.current.style.transform = `translate(${w.x}px, ${w.y}px) translate(-50%, -50%) rotate(${w.rotation}deg)`;
         workerVisualRef.current.style.opacity = w.status === 'sleeping' ? '0.4' : '1';
         
-        // Visuals for reboot mission
         if (w.status === 'rebooting') {
            workerVisualRef.current.style.filter = 'drop-shadow(0 0 15px #3b82f6) drop-shadow(0 0 30px #3b82f6)';
         } else {
@@ -458,7 +457,6 @@ const App: React.FC = () => {
     <div className={`relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none ${glitchActive ? 'glitch-active' : ''}`}>
       {!isElectron && <DesktopSimulator logs={logs} language={language} />}
       
-      {/* God Mode - Pouze v prohlížeči */}
       {!isElectron && (
         <GodModeOverlay isVisible={isGodModeVisible} onToggle={() => setIsGodModeVisible(!isGodModeVisible)} onAddScrap={handleGodAddScrap} setIgnoreMouse={setIgnoreMouse} />
       )}
@@ -467,7 +465,11 @@ const App: React.FC = () => {
       <div ref={workerVisualRef} className="absolute z-[110] pointer-events-none transition-opacity duration-300">
         <div className="relative">
           {workerRef.current.status === 'rebooting' && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-blue-500/30 blur-md animate-pulse"></div>
+            <>
+              {/* Rebooting Payload - dragging the core */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-2 w-4 h-4 rounded-full bg-blue-500 shadow-[0_0_15px_#3b82f6] animate-pulse"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-blue-500/20 blur-xl animate-pulse"></div>
+            </>
           )}
           <div className="absolute top-1/2 right-1/2 -translate-y-1/2 w-4 h-0.5 bg-blue-400/40 blur-[1px] origin-right"></div>
           <div className={`w-3.5 h-3.5 ${workerRef.current.status === 'rebooting' ? 'bg-blue-400' : 'bg-yellow-400'} rounded-full shadow-[0_0_15px_rgba(59,130,246,0.8)] border border-white/50 flex items-center justify-center`}>
@@ -478,7 +480,7 @@ const App: React.FC = () => {
 
       <div className="absolute inset-0 pointer-events-none z-[150] overflow-visible">
         {Array.from({ length: MAX_PARTICLES }).map((_, i) => (
-          <div key={i} ref={el => { particleRefs.current[i] = el; }} className="absolute blur-[1px] will-change-transform" style={{ display: 'none', width: '8px', height: '8px' }} />
+          <div key={i} ref={el => { particleRefs.current[i] = el; }} className="absolute blur-[1px] will-change-transform pointer-events-none" style={{ display: 'none', width: '8px', height: '8px' }} />
         ))}
       </div>
       <div className="train-container">
