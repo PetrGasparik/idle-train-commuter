@@ -38,6 +38,9 @@ export const translations = {
     logTransfer: 'OVERSEER: Energy transfer complete.',
     logReturn: 'OVERSEER: Tank full. Returning to dock.',
     logDocked: 'OVERSEER: Successfully docked at Command Post.',
+    logCpuStorm: 'WEATHER: CPU Storm detected! Track integrity compromised.',
+    logHighTemp: 'WARNING: Core temperature critical. Efficiency dropping.',
+    hardwareStats: 'System Vitals',
   },
   cs: {
     statusHalted: 'SYSTÉM ZASTAVEN',
@@ -75,6 +78,9 @@ export const translations = {
     logTransfer: 'DOZORCE: Přenos energie dokončen.',
     logReturn: 'DOZORCE: Nádrž plná. Návrat na základnu.',
     logDocked: 'DOZORCE: Úspěšně zadokováno na centrále.',
+    logCpuStorm: 'POČASÍ: CPU bouře! Integrita perimetru ohrožena.',
+    logHighTemp: 'VAROVÁNÍ: Kritická teplota jádra. Efektivita klesá.',
+    hardwareStats: 'Systémové funkce',
   }
 };
 

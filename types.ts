@@ -3,6 +3,12 @@ export type Language = 'en' | 'cs';
 
 export type CarType = 'standard' | 'mining' | 'residential' | 'ai';
 
+export interface HardwareStats {
+  cpu: number;
+  ram: number;
+  temp: number;
+}
+
 export interface TrainConfig {
   speed: number;
   cars: CarType[];
@@ -30,6 +36,7 @@ export interface SmokeParticle {
   driftX: number;
   driftY: number;
   borderRadius: string;
+  color: string;
 }
 
 export interface Resources {
