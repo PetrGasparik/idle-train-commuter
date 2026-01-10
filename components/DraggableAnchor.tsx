@@ -7,19 +7,22 @@ import { t } from '../locales';
 interface DraggableAnchorProps {
   language: Language;
   onHover: (hovering: boolean) => void;
+  onClick: () => void;
   onPositionChange: (x: number, y: number) => void;
   initialPos: { x: number, y: number };
   setIgnoreMouse: (ignore: boolean) => void;
 }
 
 const DraggableAnchor: React.FC<DraggableAnchorProps> = memo(({ 
-  language, onHover, onPositionChange, initialPos, setIgnoreMouse 
+  language, onHover, onClick, onPositionChange, initialPos, setIgnoreMouse 
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartOffset = useRef({ x: 0, y: 0 });
+  const hasMoved = useRef(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
+    hasMoved.current = false;
     setIgnoreMouse(false);
     
     dragStartOffset.current = {
@@ -30,12 +33,24 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = memo(({
     e.preventDefault();
   };
 
+  const handleAnchorClick = (e: React.MouseEvent) => {
+    // Menu přepneme jen pokud se s kotvou nehýbalo (nebyl to drag)
+    if (!hasMoved.current) {
+      onClick();
+    }
+  };
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
       
       const newX = e.clientX - dragStartOffset.current.x;
       const newY = e.clientY - dragStartOffset.current.y;
+      
+      // Detekce pohybu pro odlišení kliku od tažení
+      if (Math.abs(newX - initialPos.x) > 3 || Math.abs(newY - initialPos.y) > 3) {
+        hasMoved.current = true;
+      }
       
       const boundedX = Math.max(40, Math.min(window.innerWidth - 40, newX));
       const boundedY = Math.max(40, Math.min(window.innerHeight - 40, newY));
@@ -64,6 +79,7 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = memo(({
   return (
     <div
       onMouseDown={handleMouseDown}
+      onClick={handleAnchorClick}
       onMouseEnter={() => {
         onHover(true);
         setIgnoreMouse(false);
@@ -77,8 +93,8 @@ const DraggableAnchor: React.FC<DraggableAnchorProps> = memo(({
       style={{ transform: 'translate(-50%, -50%)' }}
     >
       <div className="relative group">
-        <div className="absolute -inset-14 bg-blue-500/5 rounded-full border border-blue-500/10 scale-0 group-hover:scale-100 transition-transform duration-500 pointer-events-none"></div>
         <Station language={language} />
+        {/* Hint se ukáže při najetí, ale bez modrého hala */}
         <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-black/90 px-3 py-1 rounded-full border border-white/20 text-[7px] font-black text-white uppercase tracking-widest shadow-xl opacity-0 group-hover:opacity-100 transition-all transform translate-y-1 group-hover:translate-y-0 whitespace-nowrap">
           {t(language, 'dragHint')}
         </div>

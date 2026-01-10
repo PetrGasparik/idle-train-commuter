@@ -14,13 +14,13 @@ const TrainCar: React.FC<TrainCarProps> = memo(({ config, isLocomotive, carType 
   const height = 18;
 
   const getEnergyColor = (lvl: number) => {
-    if (lvl <= 20) return '#ef4444'; // Red
+    if (lvl <= 15) return '#ef4444'; // Red
     if (lvl <= 60) return '#f59e0b'; // Amber
     return '#10b981'; // Emerald
   };
 
   const energyColor = getEnergyColor(energy);
-  const isLowEnergy = energy <= 20;
+  const isLowEnergy = energy <= 15;
 
   const renderContent = () => {
     if (config.type === 'ai' && config.imageUrl) {

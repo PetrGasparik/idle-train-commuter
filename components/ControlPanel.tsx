@@ -13,12 +13,14 @@ interface ControlPanelProps {
   onChange: (config: TrainConfig) => void;
   onPulse: () => void;
   onUpgrade: (type: 'wagon' | 'fuel' | 'mining' | 'residential') => void;
+  isGodMode?: boolean;
+  onGodAddScrap?: () => void;
 }
 
 type Tab = 'vitals' | 'shop' | 'ai';
 
 const ControlPanel: React.FC<ControlPanelProps> = memo(({ 
-  config, resources, hwStats, language, onLanguageChange, onChange, onPulse, onUpgrade 
+  config, resources, hwStats, language, onLanguageChange, onChange, onPulse, onUpgrade, isGodMode, onGodAddScrap
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('vitals');
   const [aiPrompt, setAiPrompt] = useState('');
@@ -28,7 +30,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
   const isOut = fuelPercentage <= 0;
   
   const getEnergyUI = (lvl: number) => {
-    if (lvl <= 20) return { color: 'text-red-500', bg: 'bg-red-500', glow: 'shadow-red-500/50' };
+    if (lvl <= 15) return { color: 'text-red-500', bg: 'bg-red-500', glow: 'shadow-red-500/50' };
     if (lvl <= 60) return { color: 'text-amber-500', bg: 'bg-amber-500', glow: 'shadow-amber-500/50' };
     return { color: 'text-emerald-500', bg: 'bg-emerald-500', glow: 'shadow-emerald-500/50' };
   };
@@ -36,7 +38,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
   const ui = getEnergyUI(fuelPercentage);
   
   const statusLabel = isOut ? t(language, 'statusHalted') : 
-                      resources.energy < 20 ? t(language, 'statusCritical') :
+                      resources.energy < 15 ? t(language, 'statusCritical') :
                       config.speed > 30 ? t(language, 'statusHighSpeed') : t(language, 'statusStable');
 
   return (
@@ -44,7 +46,10 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">Train OS v4.2</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">Train OS v4.2</h2>
+            {isGodMode && <span className="text-[7px] font-black text-red-500 animate-pulse uppercase tracking-tighter">[DEV_ACTIVE]</span>}
+          </div>
           <p className={`text-[7px] font-bold uppercase tracking-widest transition-colors duration-500 ${isOut ? 'text-red-500' : ui.color}`}>
             {statusLabel}
           </p>
@@ -76,7 +81,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
       </div>
 
       {/* Main Content Area */}
-      <div className="min-h-[200px] flex flex-col">
+      <div className="min-h-[220px] flex flex-col">
         {activeTab === 'vitals' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {/* Primary Resources */}
@@ -92,12 +97,22 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
                 </div>
               </div>
               <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                <p className="text-[7px] uppercase tracking-widest text-emerald-400 mb-1">{t(language, 'scrapMetal')}</p>
+                <div className="flex justify-between items-start mb-1">
+                  <p className="text-[7px] uppercase tracking-widest text-emerald-400">{t(language, 'scrapMetal')}</p>
+                  {isGodMode && onGodAddScrap && (
+                    <button 
+                      onClick={onGodAddScrap}
+                      className="text-[6px] bg-red-500/20 hover:bg-red-500/40 text-red-400 px-1 rounded border border-red-500/30 transition-colors font-bold"
+                    >
+                      +999
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-end gap-1">
                   <span className="text-sm font-mono font-bold leading-none">{Math.floor(resources.scrap)}</span>
                   <span className="text-[8px] opacity-40">{t(language, 'units')}</span>
                 </div>
-                <button onClick={onPulse} className="mt-2 w-full py-0.5 bg-blue-500/20 hover:bg-blue-500/40 rounded text-[6px] uppercase font-bold transition-all">
+                <button onClick={onPulse} className="mt-2 w-full py-1.5 bg-blue-500/20 hover:bg-blue-500/40 rounded text-[7px] uppercase font-black transition-all">
                   {t(language, 'refuel')}
                 </button>
               </div>
@@ -131,7 +146,7 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
               </div>
             </div>
 
-            {/* Core Speed (Always in Vitals) */}
+            {/* Core Speed */}
             <div>
               <div className="flex justify-between text-[8px] uppercase tracking-wider text-white/40 mb-1">
                 <span>{t(language, 'coreSpeed')}</span>
@@ -143,7 +158,6 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
                 onChange={(e) => onChange({...config, speed: Number(e.target.value)})}
                 className="w-full accent-blue-500 bg-white/10 rounded-lg appearance-none h-1.5 cursor-pointer"
               />
-              <p className="text-[6px] text-white/20 mt-1 uppercase tracking-tight italic">Warning: High speed consumes proportional energy.</p>
             </div>
           </div>
         )}
@@ -213,14 +227,6 @@ const ControlPanel: React.FC<ControlPanelProps> = memo(({
               >
                 {loading ? t(language, 'processing') : t(language, 'fabricateSkin')}
               </button>
-              {config.type === 'ai' && (
-                <div className="flex items-center gap-2 mt-4 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                  <div className="w-8 h-8 rounded bg-slate-800 overflow-hidden border border-white/10">
-                    <img src={config.imageUrl} alt="preview" className="w-full h-full object-cover" />
-                  </div>
-                  <span className="text-[7px] text-blue-400 font-bold uppercase">AI Texture Active</span>
-                </div>
-              )}
             </div>
           </div>
         )}
